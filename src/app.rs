@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use egui::{Align, Button, CentralPanel, ComboBox, Grid, Layout, ScrollArea};
+use chrono::{DateTime, Utc};
+use egui::{Align, Button, CentralPanel, Grid, Layout, ScrollArea};
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -64,10 +65,44 @@ enum Form {
     ChooseOne { options: Vec<String> },
 }
 
+#[derive(Deserialize, Serialize, PartialEq)]
+enum PollStatus {
+    SeekingResponses,
+    Closed,
+}
+
+impl Default for PollStatus {
+    fn default() -> Self {
+        Self::SeekingResponses
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+enum ConditionDescription {
+    MinAttendees(u16),
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+enum ConditionState {
+    Met,
+    NotMet,
+}
+
+#[derive(Deserialize, Serialize, PartialEq)]
+struct PollResult {
+    description: ConditionDescription,
+    state: ConditionState,
+    result: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Default, PartialEq)]
 struct Poll {
     title: String,
     description: String,
+    expiration: Option<DateTime<Utc>>,
+    announcement: Option<String>,
+    results: Vec<PollResult>,
+    status: PollStatus,
     questions: Vec<Question>,
 }
 
@@ -90,6 +125,10 @@ impl Default for App {
                 poll: Poll {
                     title: "Party!".to_string(),
                     description: "Saturday, 3pm, Mike's House".to_string(),
+                    announcement: None,
+                    expiration: None,
+                    results: vec![],
+                    status: PollStatus::SeekingResponses,
                     questions: vec![Question {
                         prompt: "Would you go?".to_string(),
                         form: Form::ChooseOne {
