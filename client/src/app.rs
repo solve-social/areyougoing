@@ -1,10 +1,16 @@
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use areyougoing_shared::{Form, FormResponse, Poll, PollStatus, Question};
+use derivative::Derivative;
+use egui::TextEdit;
 use egui::{Align, Button, CentralPanel, Grid, Layout, ScrollArea};
-use enum_iterator::Sequence;
+use futures_lite::future;
+use futures_lite::Future;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Request, RequestInit, RequestMode, Response};
 
 use crate::time::Instant;
 
@@ -20,12 +26,55 @@ pub struct App {
     // #[serde(skip)]
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+enum RetrievingState {
+    None,
+    Fetching(JsFuture),
+    Converting(JsFuture),
+}
+
+impl Default for RetrievingState {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+enum SubmittingState {
+    None,
+    Fetching(JsFuture),
+    Converting(JsFuture),
+}
+
+impl Default for SubmittingState {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Derivative)]
+#[derivative(PartialEq)]
+#[derive(Deserialize, Serialize)]
 enum PollState {
     None,
-    Creating { new_poll: Poll },
-    Retrieving { key: u64 },
-    Found { poll: Poll },
+    Creating {
+        new_poll: Poll,
+    },
+    SubmittingPoll {
+        #[serde(skip)]
+        #[derivative(PartialEq = "ignore")]
+        state: SubmittingState,
+    },
+    SubmittedPoll {
+        key: u64,
+    },
+    Retrieving {
+        key: u64,
+        #[serde(skip)]
+        #[derivative(PartialEq = "ignore")]
+        state: RetrievingState,
+    },
+    Found {
+        poll: Poll,
+    },
     NotFound,
 }
 
@@ -39,7 +88,7 @@ impl Default for PollState {
 enum AppState {
     SignedIn {
         user: String,
-        responses: Vec<Response>,
+        responses: Vec<FormResponse>,
     },
     SignIn,
     Submitting {
@@ -49,94 +98,27 @@ enum AppState {
     SubmitConfirmation,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
-pub struct Question {
-    prompt: String,
-    form: Form,
-}
-
-#[derive(Deserialize, Serialize, Sequence, PartialEq)]
-enum Response {
-    ChooseOne { choice: Option<u8> },
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-enum Form {
-    ChooseOne { options: Vec<String> },
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-enum PollStatus {
-    SeekingResponses,
-    Closed,
-}
-
-impl Default for PollStatus {
-    fn default() -> Self {
-        Self::SeekingResponses
-    }
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-enum ConditionDescription {
-    MinAttendees(u16),
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-enum ConditionState {
-    Met,
-    NotMet,
-}
-
-#[derive(Deserialize, Serialize, PartialEq)]
-struct PollResult {
-    description: ConditionDescription,
-    state: ConditionState,
-    result: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Default, PartialEq)]
-struct Poll {
-    title: String,
-    description: String,
-    expiration: Option<DateTime<Utc>>,
-    announcement: Option<String>,
-    results: Vec<PollResult>,
-    status: PollStatus,
-    questions: Vec<Question>,
-}
-
-impl Poll {
-    fn init_responses(&self) -> Vec<Response> {
-        self.questions
-            .iter()
-            .map(|q| match q.form {
-                Form::ChooseOne { options: _ } => Response::ChooseOne { choice: None },
-            })
-            .collect::<Vec<_>>()
-    }
-}
-
 impl Default for App {
     fn default() -> Self {
         Self {
             state: AppState::SignIn,
-            poll_state: PollState::Found {
-                poll: Poll {
-                    title: "Party!".to_string(),
-                    description: "Saturday, 3pm, Mike's House".to_string(),
-                    announcement: None,
-                    expiration: None,
-                    results: vec![],
-                    status: PollStatus::SeekingResponses,
-                    questions: vec![Question {
-                        prompt: "Would you go?".to_string(),
-                        form: Form::ChooseOne {
-                            options: vec!["YES".to_string(), "NO".to_string()],
-                        },
-                    }],
-                },
-            },
+            poll_state: PollState::None,
+            // poll_state: PollState::Found {
+            //     poll: Poll {
+            //         title: "Party!".to_string(),
+            //         description: "Saturday, 3pm, Mike's House".to_string(),
+            //         announcement: None,
+            //         expiration: None,
+            //         results: vec![],
+            //         status: PollStatus::SeekingResponses,
+            //         questions: vec![Question {
+            //             prompt: "Would you go?".to_string(),
+            //             form: Form::ChooseOne {
+            //                 options: vec!["YES".to_string(), "NO".to_string()],
+            //             },
+            //         }],
+            //     },
+            // },
             user_entry: "".to_string(),
             old_names: vec!["Sandra", "Peter", "Bob"]
                 .iter()
@@ -177,7 +159,10 @@ impl App {
         };
         if PollState::None == app.poll_state {
             if let Some(key) = poll_key {
-                app.poll_state = PollState::Retrieving { key };
+                app.poll_state = PollState::Retrieving {
+                    key,
+                    state: RetrievingState::None,
+                };
             }
         }
         app
@@ -203,61 +188,121 @@ impl eframe::App for App {
                 }
                 PollState::Creating { new_poll } => {
                     ui.heading("Create a new poll!");
-                    Grid::new("new_poll_form").show(ui, |ui| {
+                    ui.separator();
+                    ScrollArea::vertical().show(ui, |ui| {
                         ui.label("Title:");
                         ui.text_edit_singleline(&mut new_poll.title);
-                        ui.end_row();
 
                         ui.label("Description:");
-                        ui.text_edit_multiline(&mut new_poll.description);
-                        ui.end_row();
-                    });
-                    let mut new_question_index = None;
-                    if ui.button("Add Question").clicked() {
-                        new_question_index = Some(0);
-                    }
-                    for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
-                        ui.group(|ui| {
-                            ui.label("Prompt:");
-                            ui.text_edit_multiline(&mut question.prompt);
+                        ui.add(TextEdit::multiline(&mut new_poll.description).desired_rows(1));
 
-                            match &mut question.form {
-                                Form::ChooseOne { ref mut options } => {
-                                    let mut new_option_index = None;
-                                    if ui.button("Add Option").clicked() {
-                                        new_option_index = Some(0);
-                                    }
-                                    for (option_i, option) in options.iter_mut().enumerate() {
-                                        ui.text_edit_singleline(option);
-                                        if ui.small_button("Add Option").clicked() {
-                                            new_option_index = Some(option_i);
+                        let mut new_question_index = None;
+                        if ui.button("Add Question").clicked() {
+                            new_question_index = Some(0);
+                        }
+                        ui.separator();
+                        for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
+                            ui.group(|ui| {
+                                ui.label("Prompt:");
+                                ui.add(TextEdit::multiline(&mut question.prompt).desired_rows(1));
+
+                                match &mut question.form {
+                                    Form::ChooseOne { ref mut options } => {
+                                        let mut new_option_index = None;
+                                        if ui.button("Add Option").clicked() {
+                                            new_option_index = Some(0);
+                                        }
+                                        for (option_i, option) in options.iter_mut().enumerate() {
+                                            ui.text_edit_singleline(option);
+                                            if ui.small_button("Add Option").clicked() {
+                                                new_option_index = Some(option_i + 1);
+                                            }
+                                        }
+                                        if let Some(index) = new_option_index {
+                                            options.insert(index, "".to_string())
                                         }
                                     }
-                                    if let Some(index) = new_option_index {
-                                        options.insert(index, "".to_string())
+                                }
+                            });
+                            if ui.button("Add Question").clicked() {
+                                new_question_index = Some(question_i + 1);
+                            }
+                        }
+                        if let Some(index) = new_question_index {
+                            new_poll.questions.insert(
+                                index,
+                                Question {
+                                    prompt: "".to_string(),
+                                    form: Form::ChooseOne {
+                                        options: Vec::new(),
+                                    },
+                                },
+                            );
+                        }
+                        ui.separator();
+                        if ui.button("SUBMIT").clicked() {}
+                    });
+                }
+                PollState::SubmittingPoll { ref mut state } => {
+                    next_poll_state = Some(PollState::SubmittedPoll { key: 0 });
+                }
+                PollState::SubmittedPoll { key } => {
+                    ui.label("Your new poll has been created!");
+                    ui.label(format!(
+                        "Share it with this link: http://127.0.0.1:5001/{key}"
+                    ));
+                }
+                PollState::Retrieving { key, ref mut state } => {
+                    ui.label(format!("Retreiving Poll #{key}"));
+                    let mut next_retreiving_state = None;
+                    match state {
+                        RetrievingState::None => {
+                            let mut opts = RequestInit::new();
+                            opts.method("GET");
+                            opts.mode(RequestMode::Cors);
+
+                            let url = format!("http://127.0.0.1:3000/{key}");
+
+                            let request = Request::new_with_str_and_init(&url, &opts).unwrap();
+
+                            let window = web_sys::window().unwrap();
+                            next_retreiving_state = Some(RetrievingState::Fetching(
+                                JsFuture::from(window.fetch_with_request(&request)),
+                            ));
+                        }
+                        RetrievingState::Fetching(js_future) => {
+                            if let Some(result) = js_future.poll() {
+                                next_retreiving_state = Some(RetrievingState::None);
+                                if let Ok(resp_value) = result {
+                                    assert!(resp_value.is_instance_of::<Response>());
+                                    let resp: Response = resp_value.dyn_into().unwrap();
+
+                                    // Convert this other `Promise` into a rust `Future`.
+                                    if let Ok(json) = resp.json() {
+                                        next_retreiving_state =
+                                            Some(RetrievingState::Converting(JsFuture::from(json)));
                                     }
                                 }
                             }
-                        });
-                        if ui.button("Add Question").clicked() {
-                            new_question_index = Some(question_i);
+                        }
+                        RetrievingState::Converting(js_future) => {
+                            if let Some(result) = js_future.poll() {
+                                if let Ok(json) = result {
+                                    let json: String = json.as_string().unwrap();
+                                    if let Ok(poll) = serde_json::from_str(&json) {
+                                        // We are done! Display the poll!
+                                        next_poll_state = Some(PollState::Found { poll });
+                                    } else {
+                                        // try again
+                                        next_retreiving_state = Some(RetrievingState::None);
+                                    }
+                                }
+                            }
                         }
                     }
-
-                    if let Some(index) = new_question_index {
-                        new_poll.questions.insert(
-                            index,
-                            Question {
-                                prompt: "".to_string(),
-                                form: Form::ChooseOne {
-                                    options: Vec::new(),
-                                },
-                            },
-                        );
+                    if let Some(next_state) = next_retreiving_state {
+                        *state = next_state;
                     }
-                }
-                PollState::Retrieving { key } => {
-                    ui.label(format!("Retreiving Poll #{key}"));
                 }
                 PollState::Found { poll } => {
                     ui.heading(&poll.title);
@@ -311,7 +356,7 @@ impl eframe::App for App {
                                     match (&question.form, &mut response) {
                                         (
                                             Form::ChooseOne { options },
-                                            Response::ChooseOne { choice },
+                                            FormResponse::ChooseOne { choice },
                                         ) => {
                                             for (i, option) in options.iter().enumerate() {
                                                 let selected =
@@ -370,3 +415,14 @@ impl eframe::App for App {
         });
     }
 }
+
+pub trait Pollable
+where
+    Self: Future + Sized + Unpin,
+{
+    fn poll(&mut self) -> Option<<Self as Future>::Output> {
+        future::block_on(future::poll_once(&mut *self))
+    }
+}
+
+impl<T> Pollable for T where T: Future + Sized + Unpin {}
