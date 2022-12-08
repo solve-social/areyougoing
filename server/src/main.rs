@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, net::SocketAddr, sync::Arc};
 
-use areyougoing_shared::{Poll, PollQuery, PollQueryResult, PollStatus};
-use axum::{extract::Query, response::IntoResponse, routing::get, Extension, Json, Router};
+use areyougoing_shared::{Poll, PollQueryResult, PollStatus};
+use axum::{extract::Path, response::IntoResponse, routing::get, Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -20,7 +20,7 @@ async fn main() {
 
     let app = Router::new()
         // .route("/", get(get_page))
-        .route("/", get(get_poll))
+        .route("/:poll_id", get(get_poll))
         .layer(
             // logging
             TraceLayer::new_for_http()
@@ -91,9 +91,9 @@ impl Db {
 
 async fn get_poll(
     Extension(db): Extension<Arc<Db>>,
-    Query(poll_query): Query<PollQuery>,
+    Path(poll_id): Path<u64>,
 ) -> impl IntoResponse {
-    Json(if let Some(poll_data) = db.polls.get(&poll_query.id) {
+    Json(if let Some(poll_data) = db.polls.get(&poll_id) {
         PollQueryResult::Found(poll_data.poll.clone())
     } else {
         PollQueryResult::NotFound

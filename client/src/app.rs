@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use areyougoing_shared::{Form, FormResponse, Poll, PollStatus, Question};
+use areyougoing_shared::{Form, FormResponse, Poll, PollQueryResult, Question};
 use derivative::Derivative;
 use egui::TextEdit;
-use egui::{Align, Button, CentralPanel, Grid, Layout, ScrollArea};
+use egui::{Align, Button, CentralPanel, Layout, ScrollArea};
 use futures_lite::future;
 use futures_lite::Future;
 use serde::{Deserialize, Serialize};
@@ -73,9 +73,12 @@ enum PollState {
         state: RetrievingState,
     },
     Found {
+        key: u64,
         poll: Poll,
     },
-    NotFound,
+    NotFound {
+        key: u64,
+    },
 }
 
 impl Default for PollState {
@@ -127,28 +130,29 @@ impl Default for App {
         }
     }
 }
+use wasm_bindgen::prelude::wasm_bindgen;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[allow(unused)]
+macro_rules! console_log {
+    // Note that this is using the `log` function imported above during
+    // `bare_bones`
+    ($($t:tt)*) => (
+        #[allow(unused_unsafe)]
+        unsafe{log(&format_args!($($t)*).to_string())}
+    )
+}
 
 impl App {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customized the look at feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        let poll_key = {
-            let window = web_sys::window().expect("no global `window` exists");
-            let url_string = window.location().href().unwrap();
-            let mut url_key = None;
-            if let Ok(url) = Url::parse(&url_string) {
-                if let Some(segments) = &mut url.path_segments() {
-                    if let Some(first) = &segments.next() {
-                        if let Ok(key) = first.parse::<u64>() {
-                            url_key = Some(key);
-                        }
-                    }
-                }
-            }
-            url_key
-        };
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
@@ -157,14 +161,35 @@ impl App {
         } else {
             Default::default()
         };
-        if PollState::None == app.poll_state {
-            if let Some(key) = poll_key {
-                app.poll_state = PollState::Retrieving {
-                    key,
-                    state: RetrievingState::None,
-                };
+
+        let window = web_sys::window().expect("no global `window` exists");
+        let url_string = window.location().href().unwrap();
+        if let Ok(url) = Url::parse(&url_string) {
+            if let Some(segments) = &mut url.path_segments() {
+                if let Some(first) = &segments.next() {
+                    if let Ok(key) = first.parse::<u64>() {
+                        let mut new_key = Some(key);
+                        if let PollState::Found {
+                            poll: _,
+                            key: prexisting_key,
+                        } = app.poll_state
+                        {
+                            if prexisting_key == key {
+                                // If the key is the same as last time, cancel the reload.
+                                new_key = None;
+                            }
+                        }
+                        if let Some(key) = new_key {
+                            app.poll_state = PollState::Retrieving {
+                                key,
+                                state: RetrievingState::None,
+                            };
+                        }
+                    }
+                }
             }
         }
+
         app
     }
 }
@@ -243,7 +268,7 @@ impl eframe::App for App {
                         if ui.button("SUBMIT").clicked() {}
                     });
                 }
-                PollState::SubmittingPoll { ref mut state } => {
+                PollState::SubmittingPoll { state: _ } => {
                     next_poll_state = Some(PollState::SubmittedPoll { key: 0 });
                 }
                 PollState::SubmittedPoll { key } => {
@@ -288,12 +313,22 @@ impl eframe::App for App {
                         RetrievingState::Converting(js_future) => {
                             if let Some(result) = js_future.poll() {
                                 if let Ok(json) = result {
-                                    let json: String = json.as_string().unwrap();
-                                    if let Ok(poll) = serde_json::from_str(&json) {
-                                        // We are done! Display the poll!
-                                        next_poll_state = Some(PollState::Found { poll });
+                                    if let Ok(poll_query_result) =
+                                        serde_wasm_bindgen::from_value(json)
+                                    {
+                                        match poll_query_result {
+                                            PollQueryResult::Found(poll) => {
+                                                next_poll_state = Some(PollState::Found {
+                                                    poll,
+                                                    key: key.clone(),
+                                                });
+                                            }
+                                            PollQueryResult::NotFound => {
+                                                next_poll_state =
+                                                    Some(PollState::NotFound { key: key.clone() });
+                                            }
+                                        }
                                     } else {
-                                        // try again
                                         next_retreiving_state = Some(RetrievingState::None);
                                     }
                                 }
@@ -304,8 +339,8 @@ impl eframe::App for App {
                         *state = next_state;
                     }
                 }
-                PollState::Found { poll } => {
-                    ui.heading(&poll.title);
+                PollState::Found { key, poll } => {
+                    ui.heading(format!("{} (#{key})", poll.title));
 
                     ui.label(&poll.description);
                     ui.separator();
@@ -407,7 +442,9 @@ impl eframe::App for App {
                         self.state = state;
                     }
                 }
-                PollState::NotFound => {}
+                PollState::NotFound { key } => {
+                    ui.label(format!("No poll with ID #{key} was found 😥"));
+                }
             });
             if let Some(state) = next_poll_state {
                 self.poll_state = state;
