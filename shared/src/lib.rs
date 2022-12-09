@@ -51,7 +51,7 @@ pub struct PollResult {
     pub result: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Default, PartialEq, Clone, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
 pub struct Poll {
     pub title: String,
     pub description: String,

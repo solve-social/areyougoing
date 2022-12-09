@@ -259,10 +259,6 @@ impl eframe::App for App {
                         );
 
                         let mut new_question_index = None;
-                        if ui.small_button("Add Question").clicked() {
-                            new_question_index = Some(0);
-                        }
-
                         let mut delete_i = None;
                         let mut swap_indices = None;
 
@@ -330,14 +326,11 @@ impl eframe::App for App {
                                         .desired_rows(1)
                                         .hint_text("Prompt"),
                                 );
+                                ui.separator();
 
                                 match &mut question.form {
                                     Form::ChooseOne { ref mut options } => {
                                         let mut new_option_index = None;
-                                        if ui.small_button("Add Option").clicked() {
-                                            new_option_index = Some(0);
-                                        }
-
                                         let mut delete_i = None;
                                         let mut swap_indices = None;
                                         let num_options = options.len();
@@ -353,13 +346,21 @@ impl eframe::App for App {
                                                             ui.spacing_mut().item_spacing =
                                                                 Vec2 { x: 3., y: 1.0 };
 
-                                                            if ui
-                                                                .small_button("🗑")
-                                                                .on_hover_text("Delete option")
-                                                                .clicked()
-                                                            {
-                                                                delete_i = Some(option_i);
-                                                            }
+                                                            ui.add_enabled_ui(
+                                                                num_options > 1,
+                                                                |ui| {
+                                                                    if ui
+                                                                        .small_button("🗑")
+                                                                        .on_hover_text(
+                                                                            "Delete option",
+                                                                        )
+                                                                        .clicked()
+                                                                    {
+                                                                        delete_i = Some(option_i);
+                                                                    }
+                                                                },
+                                                            );
+
                                                             ui.add_enabled_ui(
                                                                 option_i < num_options - 1,
                                                                 |ui| {
@@ -394,6 +395,17 @@ impl eframe::App for App {
                                                                     }
                                                                 },
                                                             );
+                                                            if ui
+                                                                .small_button("➕")
+                                                                .on_hover_text(
+                                                                    "Insert option \
+                                                                    after this one",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                new_option_index =
+                                                                    Some(option_i + 1);
+                                                            }
                                                             ui.add(
                                                                 TextEdit::singleline(option)
                                                                     .hint_text(format!(
@@ -406,15 +418,18 @@ impl eframe::App for App {
                                                 },
                                             );
 
-                                            if ui.small_button("Add Option").clicked() {
-                                                new_option_index = Some(option_i + 1);
-                                            }
-                                        }
-                                        if let Some(index) = new_option_index {
-                                            options.insert(index, "".to_string())
+                                            // if ui.small_button("Add Option").clicked() {
+                                            //     new_option_index = Some(option_i + 1);
+                                            // }
                                         }
                                         if let Some(index) = delete_i {
                                             options.remove(index);
+                                        }
+                                        if options.len() == 0 {
+                                            new_option_index = Some(0);
+                                        }
+                                        if let Some(index) = new_option_index {
+                                            options.insert(index, "".to_string())
                                         }
                                         if let Some((a, b)) = swap_indices {
                                             options.swap(a, b);
@@ -434,6 +449,9 @@ impl eframe::App for App {
                         }
                         if let Some((a, b)) = swap_indices {
                             new_poll.questions.swap(a, b);
+                        }
+                        if new_poll.questions.len() == 0 {
+                            new_question_index = Some(0);
                         }
                         if let Some(index) = new_question_index {
                             new_poll.questions.insert(
