@@ -3,8 +3,9 @@ use crate::participation::ParticipationState;
 use crate::retrieve::RetrievingState;
 use areyougoing_shared::{Form, Poll, Question};
 use derivative::Derivative;
-use egui::TextEdit;
-use egui::{CentralPanel, ScrollArea};
+use egui::panel::TopBottomSide;
+use egui::{Align, CentralPanel, Layout, ScrollArea};
+use egui::{TextEdit, TopBottomPanel};
 use misc::{console_log, log};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -17,6 +18,7 @@ pub struct App {
     participation_state: ParticipationState,
     poll_state: PollState,
     sign_in_data: SignInData,
+    top_panel_inner_height: Option<f32>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -87,6 +89,7 @@ impl Default for App {
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>(),
             },
+            top_panel_inner_height: None,
         }
     }
 }
@@ -153,8 +156,39 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let mut next_poll_state = None;
+        let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
+        if let Some(height) = self.top_panel_inner_height {
+            top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
+        }
+        top_panel.show(ctx, |ui| {
+            ui.columns(3, |columns| {
+                let response = columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
+                    if ui.small_button("Create Poll").clicked() {
+                        next_poll_state = Some(PollState::Creating {
+                            new_poll: Poll::default(),
+                        })
+                    }
+                });
+                self.top_panel_inner_height = Some(response.response.rect.height());
+                if let ParticipationState::SignedIn { user, responses: _ } =
+                    &self.participation_state
+                {
+                    columns[1].with_layout(
+                        Layout::top_down(Align::Min).with_cross_align(Align::Center),
+                        |ui| {
+                            ui.label(format!("Welcome, {user}!"));
+                        },
+                    );
+                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                        if ui.small_button("Sign Out").clicked() {
+                            self.participation_state = ParticipationState::SignIn;
+                        }
+                    });
+                }
+            });
+        });
         CentralPanel::default().show(ctx, |ui| {
-            let mut next_poll_state = None;
             ui.vertical_centered(|ui| match &mut self.poll_state {
                 PollState::None => {
                     next_poll_state = Some(PollState::Creating {

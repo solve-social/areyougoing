@@ -56,14 +56,6 @@ impl ParticipationState {
                 ref user,
                 ref mut responses,
             } => {
-                ui.horizontal(|ui| {
-                    ui.label(format!("Welcome, {user}!"));
-                    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                        if ui.add(Button::new("Sign Out").small()).clicked() {
-                            next_participation_state = Some(ParticipationState::SignIn);
-                        }
-                    });
-                });
                 for (question, mut response) in poll.questions.iter().zip(responses.iter_mut()) {
                     ui.group(|ui| {
                         ui.label(&question.prompt);
