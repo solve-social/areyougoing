@@ -7,7 +7,7 @@ use crate::retrieve::RetrievingState;
 use areyougoing_shared::{Form, Poll, Question};
 use derivative::Derivative;
 use egui::panel::TopBottomSide;
-use egui::{Align, CentralPanel, Layout, ScrollArea};
+use egui::{Align, CentralPanel, Layout, Pos2, Rect, ScrollArea, Vec2};
 use egui::{TextEdit, TopBottomPanel};
 use misc::{console_log, log};
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,14 @@ impl Default for SubmittingState {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
+pub struct CreatingUiData {
+    fields_rect: Option<Rect>,
+    question_group_rect: Option<Rect>,
+    available_rect: Option<Rect>,
+    group_border_thickness: Option<f32>,
+}
+
 #[derive(Derivative)]
 #[derivative(PartialEq)]
 #[derive(Deserialize, Serialize, Debug)]
@@ -54,6 +62,7 @@ pub enum PollState {
     None,
     Creating {
         new_poll: Poll,
+        ui_data: CreatingUiData,
     },
     SubmittingPoll {
         #[serde(skip)]
@@ -150,6 +159,7 @@ impl App {
             (PollState::Found { key: _, poll: _ }, None) => {
                 app.poll_state = PollState::Creating {
                     new_poll: Poll::default(),
+                    ui_data: Default::default(),
                 };
             }
             (_, Some(url_key)) => {
@@ -185,15 +195,15 @@ impl eframe::App for App {
         top_panel.show(ctx, |ui| {
             ui.columns(3, |columns| {
                 let response = columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
-                    let create_poll_text =
-                        if let PollState::Creating { new_poll: _ } = &self.poll_state {
-                            "Clear Poll"
-                        } else {
-                            "Create Poll"
-                        };
+                    let create_poll_text = if let PollState::Creating { .. } = &self.poll_state {
+                        "Clear Poll"
+                    } else {
+                        "Create Poll"
+                    };
                     if ui.small_button(create_poll_text).clicked() {
                         next_poll_state = Some(PollState::Creating {
                             new_poll: Poll::default(),
+                            ui_data: Default::default(),
                         })
                     }
                 });
@@ -221,13 +231,27 @@ impl eframe::App for App {
                 PollState::None => {
                     next_poll_state = Some(PollState::Creating {
                         new_poll: Poll::default(),
+                        ui_data: Default::default(),
                     });
                 }
-                PollState::Creating { new_poll } => {
+                PollState::Creating {
+                    new_poll,
+                    ref mut ui_data,
+                } => {
+                    if let Some(rect) = ui_data.available_rect {
+                        if rect != ui.available_rect_before_wrap() {
+                            // Somehow the size of the window has changed, so reset/recalculate everything
+                            *ui_data = Default::default();
+                        }
+                    }
+                    ui_data.available_rect = Some(ui.available_rect_before_wrap());
+
                     ui.heading("Create a new poll!");
                     ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
-                        ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
+                        let response =
+                            ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
+                        ui_data.fields_rect = Some(response.rect);
                         ui.add(
                             TextEdit::multiline(&mut new_poll.description)
                                 .hint_text("Description")
@@ -238,9 +262,40 @@ impl eframe::App for App {
                         if ui.small_button("Add Question").clicked() {
                             new_question_index = Some(0);
                         }
+
+                        let mut delete_i = None;
                         for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
-                            ui.group(|ui| {
-                                ui.label(format!("Question {}", question_i + 1));
+                            let response = ui.group(|ui| {
+                                let label_response =
+                                    ui.label(format!("Question {}", question_i + 1));
+
+                                if let Some(group_ui_data) = ui_data.question_group_rect {
+                                    let question_controls_rect = Rect {
+                                        min: Pos2 {
+                                            x: label_response.rect.right(),
+                                            y: label_response.rect.top(),
+                                        },
+                                        max: Pos2 {
+                                            x: group_ui_data.right()
+                                                - egui::containers::Frame::group(ui.style())
+                                                    .inner_margin
+                                                    .right,
+                                            y: label_response.rect.bottom(),
+                                        },
+                                    };
+                                    ui.allocate_ui_at_rect(question_controls_rect, |ui| {
+                                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                            ui.spacing_mut().button_padding =
+                                                Vec2 { x: 0., y: 0.0 };
+                                            ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
+                                            if ui.small_button("🗑").clicked() {
+                                                delete_i = Some(question_i);
+                                            }
+                                            if ui.small_button("⬇").clicked() {}
+                                            if ui.small_button("⬆").clicked() {}
+                                        });
+                                    });
+                                }
                                 ui.add(
                                     TextEdit::multiline(&mut question.prompt)
                                         .desired_rows(1)
@@ -268,9 +323,15 @@ impl eframe::App for App {
                                     }
                                 }
                             });
+                            if question_i == 0 {
+                                ui_data.question_group_rect = Some(response.response.rect);
+                            }
                             if ui.small_button("Add Question").clicked() {
                                 new_question_index = Some(question_i + 1);
                             }
+                        }
+                        if let Some(index) = delete_i {
+                            new_poll.questions.remove(index);
                         }
                         if let Some(index) = new_question_index {
                             new_poll.questions.insert(
@@ -287,7 +348,7 @@ impl eframe::App for App {
                         if ui.button("SUBMIT").clicked() {}
                     });
                 }
-                PollState::SubmittingPoll { state: _ } => {
+                PollState::SubmittingPoll { .. } => {
                     next_poll_state = Some(PollState::SubmittedPoll { key: 0 });
                 }
                 PollState::SubmittedPoll { key } => {
@@ -312,7 +373,7 @@ impl eframe::App for App {
                 {
                     use PollState::*;
                     match &state {
-                        Creating { new_poll: _ } => {
+                        Creating { .. } => {
                             self.original_url.with_path("").push_to_window();
                         }
                         _ => {}
