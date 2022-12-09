@@ -178,41 +178,44 @@ impl eframe::App for App {
         }
         let mut next_poll_state = None;
 
-        if let PollState::Creating { new_poll: _ } = &self.poll_state {
-        } else {
-            let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
-            if let Some(height) = self.top_panel_inner_height {
-                top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
-            }
-            top_panel.show(ctx, |ui| {
-                ui.columns(3, |columns| {
-                    let response =
-                        columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
-                            if ui.small_button("Create Poll").clicked() {
-                                next_poll_state = Some(PollState::Creating {
-                                    new_poll: Poll::default(),
-                                })
-                            }
-                        });
-                    self.top_panel_inner_height = Some(response.response.rect.height());
-                    if let ParticipationState::SignedIn { user, responses: _ } =
-                        &self.participation_state
-                    {
-                        columns[1].with_layout(
-                            Layout::top_down(Align::Min).with_cross_align(Align::Center),
-                            |ui| {
-                                ui.label(format!("Welcome, {user}!"));
-                            },
-                        );
-                        columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            if ui.small_button("Sign Out").clicked() {
-                                self.participation_state = ParticipationState::SignIn;
-                            }
-                        });
+        let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
+        if let Some(height) = self.top_panel_inner_height {
+            top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
+        }
+        top_panel.show(ctx, |ui| {
+            ui.columns(3, |columns| {
+                let response = columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
+                    let create_poll_text =
+                        if let PollState::Creating { new_poll: _ } = &self.poll_state {
+                            "Clear Poll"
+                        } else {
+                            "Create Poll"
+                        };
+                    if ui.small_button(create_poll_text).clicked() {
+                        next_poll_state = Some(PollState::Creating {
+                            new_poll: Poll::default(),
+                        })
                     }
                 });
+                self.top_panel_inner_height = Some(response.response.rect.height());
+                if let ParticipationState::SignedIn { user, responses: _ } =
+                    &self.participation_state
+                {
+                    columns[1].with_layout(
+                        Layout::top_down(Align::Min).with_cross_align(Align::Center),
+                        |ui| {
+                            ui.label(format!("Welcome, {user}!"));
+                        },
+                    );
+                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                        if ui.small_button("Sign Out").clicked() {
+                            self.participation_state = ParticipationState::SignIn;
+                        }
+                    });
+                }
             });
-        }
+        });
+
         CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| match &mut self.poll_state {
                 PollState::None => {
