@@ -188,9 +188,10 @@ impl eframe::App for App {
         }
         let mut next_poll_state = None;
 
-        let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
+        let mut top_panel =
+            TopBottomPanel::new(TopBottomSide::Top, "top_panel").show_separator_line(false);
         if let Some(height) = self.top_panel_inner_height {
-            top_panel = top_panel.height_range((height)..=(height + 1.0));
+            top_panel = top_panel.exact_height(height);
         }
         top_panel.show(ctx, |ui| {
             ui.columns(3, |columns| {
