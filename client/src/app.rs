@@ -190,7 +190,7 @@ impl eframe::App for App {
 
         let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
         if let Some(height) = self.top_panel_inner_height {
-            top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
+            top_panel = top_panel.height_range((height)..=(height + 1.0));
         }
         top_panel.show(ctx, |ui| {
             ui.columns(3, |columns| {
@@ -293,7 +293,11 @@ impl eframe::App for App {
                                             ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
 
                                             ui.add_enabled_ui(question_i != 0, |ui| {
-                                                if ui.small_button("⬆").clicked() {
+                                                if ui
+                                                    .small_button("⬆")
+                                                    .on_hover_text("Move question up")
+                                                    .clicked()
+                                                {
                                                     swap_indices =
                                                         Some((question_i, question_i - 1));
                                                 }
@@ -301,13 +305,21 @@ impl eframe::App for App {
                                             ui.add_enabled_ui(
                                                 question_i < num_questions - 1,
                                                 |ui| {
-                                                    if ui.small_button("⬇").clicked() {
+                                                    if ui
+                                                        .small_button("⬇")
+                                                        .on_hover_text("Move question down")
+                                                        .clicked()
+                                                    {
                                                         swap_indices =
                                                             Some((question_i, question_i + 1));
                                                     }
                                                 },
                                             );
-                                            if ui.small_button("🗑").clicked() {
+                                            if ui
+                                                .small_button("🗑")
+                                                .on_hover_text("Delete question")
+                                                .clicked()
+                                            {
                                                 delete_i = Some(question_i);
                                             }
                                         });
@@ -341,7 +353,11 @@ impl eframe::App for App {
                                                             ui.spacing_mut().item_spacing =
                                                                 Vec2 { x: 3., y: 1.0 };
 
-                                                            if ui.small_button("🗑").clicked() {
+                                                            if ui
+                                                                .small_button("🗑")
+                                                                .on_hover_text("Delete option")
+                                                                .clicked()
+                                                            {
                                                                 delete_i = Some(option_i);
                                                             }
                                                             ui.add_enabled_ui(
@@ -349,6 +365,9 @@ impl eframe::App for App {
                                                                 |ui| {
                                                                     if ui
                                                                         .small_button("⬇")
+                                                                        .on_hover_text(
+                                                                            "Move option down",
+                                                                        )
                                                                         .clicked()
                                                                     {
                                                                         swap_indices = Some((
@@ -363,6 +382,9 @@ impl eframe::App for App {
                                                                 |ui| {
                                                                     if ui
                                                                         .small_button("⬆")
+                                                                        .on_hover_text(
+                                                                            "Move option up",
+                                                                        )
                                                                         .clicked()
                                                                     {
                                                                         swap_indices = Some((
