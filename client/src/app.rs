@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::misc::{self, get_window, listen_in_window, AtomicBoolExt, UrlExt};
 use crate::participation::ParticipationState;
@@ -7,7 +8,7 @@ use crate::retrieve::RetrievingState;
 use areyougoing_shared::{Form, Poll, Question};
 use derivative::Derivative;
 use egui::panel::TopBottomSide;
-use egui::{Align, CentralPanel, Layout, Pos2, Rect, ScrollArea, Vec2};
+use egui::{Align, CentralPanel, Layout, Pos2, Rect, RichText, ScrollArea, Vec2};
 use egui::{TextEdit, TopBottomPanel};
 use misc::{console_log, log};
 use serde::{Deserialize, Serialize};
@@ -479,6 +480,8 @@ impl eframe::App for App {
                 PollState::Retrieving { key, ref mut state } => {
                     ui.label(format!("Retreiving Poll #{key}"));
                     state.process(&mut next_poll_state, *key);
+                    // Make sure the UI keeps updating in order to keep polling the fetch process
+                    ui.ctx().request_repaint_after(Duration::from_millis(100));
                 }
                 PollState::Found { key, poll } => {
                     self.participation_state
