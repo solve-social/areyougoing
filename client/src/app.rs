@@ -275,26 +275,29 @@ impl eframe::App for App {
                                 if let Some(group_ui_data) = ui_data.question_group_rect {
                                     let question_controls_rect = Rect {
                                         min: Pos2 {
-                                            x: label_response.rect.right(),
+                                            x: group_ui_data.left()
+                                                + egui::containers::Frame::group(ui.style())
+                                                    .inner_margin
+                                                    .left,
                                             y: label_response.rect.top(),
                                         },
                                         max: Pos2 {
-                                            x: group_ui_data.right()
-                                                - egui::containers::Frame::group(ui.style())
-                                                    .inner_margin
-                                                    .right,
+                                            x: label_response.rect.left(),
                                             y: label_response.rect.bottom(),
                                         },
                                     };
                                     ui.allocate_ui_at_rect(question_controls_rect, |ui| {
-                                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                                             ui.spacing_mut().button_padding =
                                                 Vec2 { x: 0., y: 0.0 };
                                             ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
-                                            if ui.small_button("🗑").clicked() {
-                                                question_delete_i = Some(question_i);
-                                            }
 
+                                            ui.add_enabled_ui(question_i != 0, |ui| {
+                                                if ui.small_button("⬆").clicked() {
+                                                    question_swap_indices =
+                                                        Some((question_i, question_i - 1));
+                                                }
+                                            });
                                             ui.add_enabled_ui(
                                                 question_i < num_questions - 1,
                                                 |ui| {
@@ -304,13 +307,9 @@ impl eframe::App for App {
                                                     }
                                                 },
                                             );
-
-                                            ui.add_enabled_ui(question_i != 0, |ui| {
-                                                if ui.small_button("⬆").clicked() {
-                                                    question_swap_indices =
-                                                        Some((question_i, question_i - 1));
-                                                }
-                                            });
+                                            if ui.small_button("🗑").clicked() {
+                                                question_delete_i = Some(question_i);
+                                            }
                                         });
                                     });
                                 }
