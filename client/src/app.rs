@@ -263,8 +263,8 @@ impl eframe::App for App {
                             new_question_index = Some(0);
                         }
 
-                        let mut question_delete_i = None;
-                        let mut question_swap_indices = None;
+                        let mut delete_i = None;
+                        let mut swap_indices = None;
 
                         let num_questions = new_poll.questions.len();
                         for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
@@ -294,7 +294,7 @@ impl eframe::App for App {
 
                                             ui.add_enabled_ui(question_i != 0, |ui| {
                                                 if ui.small_button("⬆").clicked() {
-                                                    question_swap_indices =
+                                                    swap_indices =
                                                         Some((question_i, question_i - 1));
                                                 }
                                             });
@@ -302,13 +302,13 @@ impl eframe::App for App {
                                                 question_i < num_questions - 1,
                                                 |ui| {
                                                     if ui.small_button("⬇").clicked() {
-                                                        question_swap_indices =
+                                                        swap_indices =
                                                             Some((question_i, question_i + 1));
                                                     }
                                                 },
                                             );
                                             if ui.small_button("🗑").clicked() {
-                                                question_delete_i = Some(question_i);
+                                                delete_i = Some(question_i);
                                             }
                                         });
                                     });
@@ -325,17 +325,77 @@ impl eframe::App for App {
                                         if ui.small_button("Add Option").clicked() {
                                             new_option_index = Some(0);
                                         }
+
+                                        let mut delete_i = None;
+                                        let mut swap_indices = None;
+                                        let num_options = options.len();
                                         for (option_i, option) in options.iter_mut().enumerate() {
-                                            ui.add(
-                                                TextEdit::singleline(option)
-                                                    .hint_text(format!("Option {}", option_i + 1)),
+                                            ui.allocate_ui(
+                                                ui_data.fields_rect.unwrap().size(),
+                                                |ui| {
+                                                    ui.with_layout(
+                                                        Layout::right_to_left(Align::Center),
+                                                        |ui| {
+                                                            ui.spacing_mut().button_padding =
+                                                                Vec2 { x: 0., y: 0.0 };
+                                                            ui.spacing_mut().item_spacing =
+                                                                Vec2 { x: 3., y: 1.0 };
+
+                                                            if ui.small_button("🗑").clicked() {
+                                                                delete_i = Some(option_i);
+                                                            }
+                                                            ui.add_enabled_ui(
+                                                                option_i < num_options - 1,
+                                                                |ui| {
+                                                                    if ui
+                                                                        .small_button("⬇")
+                                                                        .clicked()
+                                                                    {
+                                                                        swap_indices = Some((
+                                                                            option_i,
+                                                                            option_i + 1,
+                                                                        ));
+                                                                    }
+                                                                },
+                                                            );
+                                                            ui.add_enabled_ui(
+                                                                option_i != 0,
+                                                                |ui| {
+                                                                    if ui
+                                                                        .small_button("⬆")
+                                                                        .clicked()
+                                                                    {
+                                                                        swap_indices = Some((
+                                                                            option_i,
+                                                                            option_i - 1,
+                                                                        ));
+                                                                    }
+                                                                },
+                                                            );
+                                                            ui.add(
+                                                                TextEdit::singleline(option)
+                                                                    .hint_text(format!(
+                                                                        "Option {}",
+                                                                        option_i + 1
+                                                                    )),
+                                                            );
+                                                        },
+                                                    );
+                                                },
                                             );
+
                                             if ui.small_button("Add Option").clicked() {
                                                 new_option_index = Some(option_i + 1);
                                             }
                                         }
                                         if let Some(index) = new_option_index {
                                             options.insert(index, "".to_string())
+                                        }
+                                        if let Some(index) = delete_i {
+                                            options.remove(index);
+                                        }
+                                        if let Some((a, b)) = swap_indices {
+                                            options.swap(a, b);
                                         }
                                     }
                                 }
@@ -347,10 +407,10 @@ impl eframe::App for App {
                                 new_question_index = Some(question_i + 1);
                             }
                         }
-                        if let Some(index) = question_delete_i {
+                        if let Some(index) = delete_i {
                             new_poll.questions.remove(index);
                         }
-                        if let Some((a, b)) = question_swap_indices {
+                        if let Some((a, b)) = swap_indices {
                             new_poll.questions.swap(a, b);
                         }
                         if let Some(index) = new_question_index {
