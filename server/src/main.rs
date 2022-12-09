@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, net::SocketAddr, sync::Arc};
 
 use areyougoing_shared::{Poll, PollQueryResult, PollStatus};
 use axum::{extract::Path, response::IntoResponse, routing::get, Extension, Json, Router};
+use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -84,7 +85,11 @@ impl Db {
                 },
             },
         );
-        fs::write(DB_PATH, ron::to_string(&db).unwrap()).unwrap();
+        fs::write(
+            DB_PATH,
+            ron::ser::to_string_pretty(&db, PrettyConfig::new()).unwrap(),
+        )
+        .unwrap();
         db
     }
 }
