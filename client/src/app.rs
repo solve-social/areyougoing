@@ -263,7 +263,10 @@ impl eframe::App for App {
                             new_question_index = Some(0);
                         }
 
-                        let mut delete_i = None;
+                        let mut question_delete_i = None;
+                        let mut question_swap_indices = None;
+
+                        let num_questions = new_poll.questions.len();
                         for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
                             let response = ui.group(|ui| {
                                 let label_response =
@@ -289,10 +292,25 @@ impl eframe::App for App {
                                                 Vec2 { x: 0., y: 0.0 };
                                             ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
                                             if ui.small_button("🗑").clicked() {
-                                                delete_i = Some(question_i);
+                                                question_delete_i = Some(question_i);
                                             }
-                                            if ui.small_button("⬇").clicked() {}
-                                            if ui.small_button("⬆").clicked() {}
+
+                                            ui.add_enabled_ui(
+                                                question_i < num_questions - 1,
+                                                |ui| {
+                                                    if ui.small_button("⬇").clicked() {
+                                                        question_swap_indices =
+                                                            Some((question_i, question_i + 1));
+                                                    }
+                                                },
+                                            );
+
+                                            ui.add_enabled_ui(question_i != 0, |ui| {
+                                                if ui.small_button("⬆").clicked() {
+                                                    question_swap_indices =
+                                                        Some((question_i, question_i - 1));
+                                                }
+                                            });
                                         });
                                     });
                                 }
@@ -330,8 +348,11 @@ impl eframe::App for App {
                                 new_question_index = Some(question_i + 1);
                             }
                         }
-                        if let Some(index) = delete_i {
+                        if let Some(index) = question_delete_i {
                             new_poll.questions.remove(index);
+                        }
+                        if let Some((a, b)) = question_swap_indices {
+                            new_poll.questions.swap(a, b);
                         }
                         if let Some(index) = new_question_index {
                             new_poll.questions.insert(
