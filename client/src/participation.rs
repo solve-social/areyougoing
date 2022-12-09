@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::{app::SignInData, time::Instant};
 use areyougoing_shared::{Form, FormResponse, Poll};
-use egui::{Align, Button, Layout, ScrollArea, Ui};
+use egui::{Button, ScrollArea, Ui};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, PartialEq)]
@@ -53,7 +53,7 @@ impl ParticipationState {
                 });
             }
             ParticipationState::SignedIn {
-                ref user,
+                user: _,
                 ref mut responses,
             } => {
                 for (question, mut response) in poll.questions.iter().zip(responses.iter_mut()) {
