@@ -214,7 +214,7 @@ impl eframe::App for App {
                     columns[1].with_layout(
                         Layout::top_down(Align::Min).with_cross_align(Align::Center),
                         |ui| {
-                            ui.label(format!("Welcome, {user}!"));
+                            ui.label(RichText::new(format!("Welcome, {user}!")).strong());
                         },
                     );
                     columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
