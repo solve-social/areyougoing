@@ -249,9 +249,7 @@ impl eframe::App for App {
                     ui.heading("Create a new poll!");
                     ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
-                        let response =
-                            ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
-                        ui_data.fields_rect = Some(response.rect);
+                        ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
                         ui.add(
                             TextEdit::multiline(&mut new_poll.description)
                                 .hint_text("Description")
@@ -268,34 +266,30 @@ impl eframe::App for App {
                                 let label_response =
                                     ui.label(format!("Question {}", question_i + 1));
 
-                                if let Some(group_ui_data) = ui_data.question_group_rect {
+                                if let Some(fields_rect) = ui_data.fields_rect {
                                     let question_controls_rect = Rect {
                                         min: Pos2 {
-                                            x: group_ui_data.left()
-                                                + egui::containers::Frame::group(ui.style())
-                                                    .inner_margin
-                                                    .left,
+                                            x: label_response.rect.right(),
                                             y: label_response.rect.top(),
                                         },
                                         max: Pos2 {
-                                            x: label_response.rect.left(),
+                                            x: fields_rect.right(),
                                             y: label_response.rect.bottom(),
                                         },
                                     };
                                     ui.allocate_ui_at_rect(question_controls_rect, |ui| {
-                                        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                                             ui.spacing_mut().button_padding =
                                                 Vec2 { x: 0., y: 0.0 };
                                             ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
 
-                                            ui.add_enabled_ui(question_i != 0, |ui| {
+                                            ui.add_enabled_ui(num_questions > 1, |ui| {
                                                 if ui
-                                                    .small_button("⬆")
-                                                    .on_hover_text("Move question up")
+                                                    .small_button("🗑")
+                                                    .on_hover_text("Delete question")
                                                     .clicked()
                                                 {
-                                                    swap_indices =
-                                                        Some((question_i, question_i - 1));
+                                                    delete_i = Some(question_i);
                                                 }
                                             });
                                             ui.add_enabled_ui(
@@ -311,23 +305,25 @@ impl eframe::App for App {
                                                     }
                                                 },
                                             );
-                                            ui.add_enabled_ui(num_questions > 1, |ui| {
+                                            ui.add_enabled_ui(question_i != 0, |ui| {
                                                 if ui
-                                                    .small_button("🗑")
-                                                    .on_hover_text("Delete question")
+                                                    .small_button("⬆")
+                                                    .on_hover_text("Move question up")
                                                     .clicked()
                                                 {
-                                                    delete_i = Some(question_i);
+                                                    swap_indices =
+                                                        Some((question_i, question_i - 1));
                                                 }
                                             });
                                         });
                                     });
                                 }
-                                ui.add(
+                                let response = ui.add(
                                     TextEdit::multiline(&mut question.prompt)
                                         .desired_rows(1)
                                         .hint_text("Prompt"),
                                 );
+                                ui_data.fields_rect = Some(response.rect);
                                 ui.separator();
 
                                 match &mut question.form {
