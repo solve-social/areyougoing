@@ -1,4 +1,7 @@
-use crate::misc;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+use crate::misc::{self, get_window, listen_in_window, AtomicBoolExt, UrlExt};
 use crate::participation::ParticipationState;
 use crate::retrieve::RetrievingState;
 use areyougoing_shared::{Form, Poll, Question};
@@ -19,6 +22,10 @@ pub struct App {
     poll_state: PollState,
     sign_in_data: SignInData,
     top_panel_inner_height: Option<f32>,
+    #[serde(skip)]
+    original_url: Option<Url>,
+    #[serde(skip)]
+    need_reload: Arc<AtomicBool>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -90,6 +97,8 @@ impl Default for App {
                     .collect::<Vec<_>>(),
             },
             top_panel_inner_height: None,
+            original_url: None,
+            need_reload: Default::default(),
         }
     }
 }
@@ -107,11 +116,19 @@ impl App {
             Default::default()
         };
 
+        {
+            let clone = app.need_reload.clone();
+            listen_in_window("popstate", move |_event| {
+                clone.set(true);
+            });
+        }
+
         let url_key = {
             let mut url_key = None;
             let window = web_sys::window().expect("no global `window` exists");
             let url_string = window.location().href().unwrap();
             if let Ok(url) = Url::parse(&url_string) {
+                app.original_url = Some(url.clone());
                 if let Some(segments) = &mut url.path_segments() {
                     if let Some(first) = &segments.next() {
                         if let Ok(key) = first.parse::<u64>() {
@@ -156,38 +173,46 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut next_poll_state = None;
-        let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
-        if let Some(height) = self.top_panel_inner_height {
-            top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
+        if self.need_reload.get() {
+            get_window().location().reload().expect("Failed to reload");
         }
-        top_panel.show(ctx, |ui| {
-            ui.columns(3, |columns| {
-                let response = columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
-                    if ui.small_button("Create Poll").clicked() {
-                        next_poll_state = Some(PollState::Creating {
-                            new_poll: Poll::default(),
-                        })
+        let mut next_poll_state = None;
+
+        if let PollState::Creating { new_poll: _ } = &self.poll_state {
+        } else {
+            let mut top_panel = TopBottomPanel::new(TopBottomSide::Top, "top_panel");
+            if let Some(height) = self.top_panel_inner_height {
+                top_panel = top_panel.height_range((height - 1.0)..=(height + 1.0));
+            }
+            top_panel.show(ctx, |ui| {
+                ui.columns(3, |columns| {
+                    let response =
+                        columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
+                            if ui.small_button("Create Poll").clicked() {
+                                next_poll_state = Some(PollState::Creating {
+                                    new_poll: Poll::default(),
+                                })
+                            }
+                        });
+                    self.top_panel_inner_height = Some(response.response.rect.height());
+                    if let ParticipationState::SignedIn { user, responses: _ } =
+                        &self.participation_state
+                    {
+                        columns[1].with_layout(
+                            Layout::top_down(Align::Min).with_cross_align(Align::Center),
+                            |ui| {
+                                ui.label(format!("Welcome, {user}!"));
+                            },
+                        );
+                        columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            if ui.small_button("Sign Out").clicked() {
+                                self.participation_state = ParticipationState::SignIn;
+                            }
+                        });
                     }
                 });
-                self.top_panel_inner_height = Some(response.response.rect.height());
-                if let ParticipationState::SignedIn { user, responses: _ } =
-                    &self.participation_state
-                {
-                    columns[1].with_layout(
-                        Layout::top_down(Align::Min).with_cross_align(Align::Center),
-                        |ui| {
-                            ui.label(format!("Welcome, {user}!"));
-                        },
-                    );
-                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
-                        if ui.small_button("Sign Out").clicked() {
-                            self.participation_state = ParticipationState::SignIn;
-                        }
-                    });
-                }
             });
-        });
+        }
         CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| match &mut self.poll_state {
                 PollState::None => {
@@ -264,9 +289,9 @@ impl eframe::App for App {
                 }
                 PollState::SubmittedPoll { key } => {
                     ui.label("Your new poll has been created!");
-                    ui.label(format!(
-                        "Share it with this link: http://127.0.0.1:5001/{key}"
-                    ));
+                    let mut link = self.original_url.as_ref().unwrap().clone();
+                    link.set_path(&format!("{key}"));
+                    ui.label(format!("Share it with this link: {link}"));
                 }
                 PollState::Retrieving { key, ref mut state } => {
                     ui.label(format!("Retreiving Poll #{key}"));
@@ -281,6 +306,15 @@ impl eframe::App for App {
                 }
             });
             if let Some(state) = next_poll_state {
+                {
+                    use PollState::*;
+                    match &state {
+                        Creating { new_poll: _ } => {
+                            self.original_url.with_path("").push_to_window();
+                        }
+                        _ => {}
+                    }
+                }
                 self.poll_state = state;
             }
         });

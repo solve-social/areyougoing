@@ -19,6 +19,7 @@ derivative = "2.2"
 serde = { version = "1", features = ["derive"] }
 futures-lite = "1.11"
 serde_json = "1.0"
+gloo = "0.8"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -32,6 +33,7 @@ web-sys = { version = "0.3", features = [
     'RequestMode',
     'Response',
     'Window',
+    'History',
 ] }
 url = "2.2"
 js-sys = "0.3.60"
