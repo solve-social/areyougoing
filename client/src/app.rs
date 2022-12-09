@@ -1,44 +1,32 @@
-use std::time::Duration;
-
-use areyougoing_shared::{Form, FormResponse, Poll, PollQueryResult, Question};
+use crate::misc;
+use crate::participation::ParticipationState;
+use crate::retrieve::RetrievingState;
+use areyougoing_shared::{Form, Poll, Question};
 use derivative::Derivative;
 use egui::TextEdit;
-use egui::{Align, Button, CentralPanel, Layout, ScrollArea};
-use futures_lite::future;
-use futures_lite::Future;
+use egui::{CentralPanel, ScrollArea};
+use misc::{console_log, log};
 use serde::{Deserialize, Serialize};
 use url::Url;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
-
-use crate::time::Instant;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(Deserialize, Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
-    state: AppState,
+    participation_state: ParticipationState,
     poll_state: PollState,
-    user_entry: String,
-    old_names: Vec<String>,
-    // this how you opt-out of serialization of a member
-    // #[serde(skip)]
+    sign_in_data: SignInData,
 }
 
-enum RetrievingState {
-    None,
-    Fetching(JsFuture),
-    Converting(JsFuture),
+#[derive(Deserialize, Serialize)]
+pub struct SignInData {
+    pub user_entry: String,
+    pub old_names: Vec<String>,
 }
 
-impl Default for RetrievingState {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-enum SubmittingState {
+#[derive(Debug)]
+pub enum SubmittingState {
     None,
     Fetching(JsFuture),
     Converting(JsFuture),
@@ -52,8 +40,8 @@ impl Default for SubmittingState {
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
-#[derive(Deserialize, Serialize)]
-enum PollState {
+#[derive(Deserialize, Serialize, Debug)]
+pub enum PollState {
     None,
     Creating {
         new_poll: Poll,
@@ -87,69 +75,23 @@ impl Default for PollState {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
-enum AppState {
-    SignedIn {
-        user: String,
-        responses: Vec<FormResponse>,
-    },
-    SignIn,
-    Submitting {
-        #[serde(skip)]
-        progress: Option<Instant>,
-    },
-    SubmitConfirmation,
-}
-
 impl Default for App {
     fn default() -> Self {
         Self {
-            state: AppState::SignIn,
+            participation_state: ParticipationState::SignIn,
             poll_state: PollState::None,
-            // poll_state: PollState::Found {
-            //     poll: Poll {
-            //         title: "Party!".to_string(),
-            //         description: "Saturday, 3pm, Mike's House".to_string(),
-            //         announcement: None,
-            //         expiration: None,
-            //         results: vec![],
-            //         status: PollStatus::SeekingResponses,
-            //         questions: vec![Question {
-            //             prompt: "Would you go?".to_string(),
-            //             form: Form::ChooseOne {
-            //                 options: vec!["YES".to_string(), "NO".to_string()],
-            //             },
-            //         }],
-            //     },
-            // },
-            user_entry: "".to_string(),
-            old_names: vec!["Sandra", "Peter", "Bob"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>(),
+            sign_in_data: SignInData {
+                user_entry: "".to_string(),
+                old_names: vec!["Sandra", "Peter", "Bob"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+            },
         }
     }
 }
-use wasm_bindgen::prelude::wasm_bindgen;
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-}
-
-#[allow(unused)]
-macro_rules! console_log {
-    // Note that this is using the `log` function imported above during
-    // `bare_bones`
-    ($($t:tt)*) => (
-        #[allow(unused_unsafe)]
-        unsafe{log(&format_args!($($t)*).to_string())}
-    )
-}
 
 impl App {
-    /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customized the look at feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -162,33 +104,43 @@ impl App {
             Default::default()
         };
 
-        let window = web_sys::window().expect("no global `window` exists");
-        let url_string = window.location().href().unwrap();
-        if let Ok(url) = Url::parse(&url_string) {
-            if let Some(segments) = &mut url.path_segments() {
-                if let Some(first) = &segments.next() {
-                    if let Ok(key) = first.parse::<u64>() {
-                        let mut new_key = Some(key);
-                        if let PollState::Found {
-                            poll: _,
-                            key: prexisting_key,
-                        } = app.poll_state
-                        {
-                            if prexisting_key == key {
-                                // If the key is the same as last time, cancel the reload.
-                                new_key = None;
-                            }
-                        }
-                        if let Some(key) = new_key {
-                            app.poll_state = PollState::Retrieving {
-                                key,
-                                state: RetrievingState::None,
-                            };
+        let url_key = {
+            let mut url_key = None;
+            let window = web_sys::window().expect("no global `window` exists");
+            let url_string = window.location().href().unwrap();
+            if let Ok(url) = Url::parse(&url_string) {
+                if let Some(segments) = &mut url.path_segments() {
+                    if let Some(first) = &segments.next() {
+                        if let Ok(key) = first.parse::<u64>() {
+                            url_key = Some(key);
                         }
                     }
                 }
             }
+            url_key
+        };
+
+        match (&mut app.poll_state, url_key) {
+            (PollState::Found { key, poll: _ }, Some(url_key)) if *key != url_key => {
+                app.poll_state = PollState::Retrieving {
+                    key: url_key,
+                    state: RetrievingState::None,
+                };
+            }
+            (PollState::Found { key: _, poll: _ }, None) => {
+                app.poll_state = PollState::Creating {
+                    new_poll: Poll::default(),
+                };
+            }
+            (_, Some(url_key)) => {
+                app.poll_state = PollState::Retrieving {
+                    key: url_key,
+                    state: RetrievingState::None,
+                };
+            }
+            _ => {}
         }
+        console_log!("Initial PollState: {:?}", app.poll_state);
 
         app
     }
@@ -200,8 +152,6 @@ impl eframe::App for App {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
-    /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             let mut next_poll_state = None;
@@ -215,30 +165,37 @@ impl eframe::App for App {
                     ui.heading("Create a new poll!");
                     ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
-                        ui.label("Title:");
-                        ui.text_edit_singleline(&mut new_poll.title);
-
-                        ui.label("Description:");
-                        ui.add(TextEdit::multiline(&mut new_poll.description).desired_rows(1));
+                        ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
+                        ui.add(
+                            TextEdit::multiline(&mut new_poll.description)
+                                .hint_text("Description")
+                                .desired_rows(1),
+                        );
 
                         let mut new_question_index = None;
-                        if ui.button("Add Question").clicked() {
+                        if ui.small_button("Add Question").clicked() {
                             new_question_index = Some(0);
                         }
-                        ui.separator();
                         for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
                             ui.group(|ui| {
-                                ui.label("Prompt:");
-                                ui.add(TextEdit::multiline(&mut question.prompt).desired_rows(1));
+                                ui.label(format!("Question {}", question_i + 1));
+                                ui.add(
+                                    TextEdit::multiline(&mut question.prompt)
+                                        .desired_rows(1)
+                                        .hint_text("Prompt"),
+                                );
 
                                 match &mut question.form {
                                     Form::ChooseOne { ref mut options } => {
                                         let mut new_option_index = None;
-                                        if ui.button("Add Option").clicked() {
+                                        if ui.small_button("Add Option").clicked() {
                                             new_option_index = Some(0);
                                         }
                                         for (option_i, option) in options.iter_mut().enumerate() {
-                                            ui.text_edit_singleline(option);
+                                            ui.add(
+                                                TextEdit::singleline(option)
+                                                    .hint_text(format!("Option {}", option_i + 1)),
+                                            );
                                             if ui.small_button("Add Option").clicked() {
                                                 new_option_index = Some(option_i + 1);
                                             }
@@ -249,7 +206,7 @@ impl eframe::App for App {
                                     }
                                 }
                             });
-                            if ui.button("Add Question").clicked() {
+                            if ui.small_button("Add Question").clicked() {
                                 new_question_index = Some(question_i + 1);
                             }
                         }
@@ -279,168 +236,11 @@ impl eframe::App for App {
                 }
                 PollState::Retrieving { key, ref mut state } => {
                     ui.label(format!("Retreiving Poll #{key}"));
-                    let mut next_retreiving_state = None;
-                    match state {
-                        RetrievingState::None => {
-                            let mut opts = RequestInit::new();
-                            opts.method("GET");
-                            opts.mode(RequestMode::Cors);
-
-                            let url = format!("http://127.0.0.1:3000/{key}");
-
-                            let request = Request::new_with_str_and_init(&url, &opts).unwrap();
-
-                            let window = web_sys::window().unwrap();
-                            next_retreiving_state = Some(RetrievingState::Fetching(
-                                JsFuture::from(window.fetch_with_request(&request)),
-                            ));
-                        }
-                        RetrievingState::Fetching(js_future) => {
-                            if let Some(result) = js_future.poll() {
-                                next_retreiving_state = Some(RetrievingState::None);
-                                if let Ok(resp_value) = result {
-                                    assert!(resp_value.is_instance_of::<Response>());
-                                    let resp: Response = resp_value.dyn_into().unwrap();
-
-                                    // Convert this other `Promise` into a rust `Future`.
-                                    if let Ok(json) = resp.json() {
-                                        next_retreiving_state =
-                                            Some(RetrievingState::Converting(JsFuture::from(json)));
-                                    }
-                                }
-                            }
-                        }
-                        RetrievingState::Converting(js_future) => {
-                            if let Some(result) = js_future.poll() {
-                                if let Ok(json) = result {
-                                    if let Ok(poll_query_result) =
-                                        serde_wasm_bindgen::from_value(json)
-                                    {
-                                        match poll_query_result {
-                                            PollQueryResult::Found(poll) => {
-                                                next_poll_state = Some(PollState::Found {
-                                                    poll,
-                                                    key: key.clone(),
-                                                });
-                                            }
-                                            PollQueryResult::NotFound => {
-                                                next_poll_state =
-                                                    Some(PollState::NotFound { key: key.clone() });
-                                            }
-                                        }
-                                    } else {
-                                        next_retreiving_state = Some(RetrievingState::None);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let Some(next_state) = next_retreiving_state {
-                        *state = next_state;
-                    }
+                    state.process(&mut next_poll_state, *key);
                 }
                 PollState::Found { key, poll } => {
-                    ui.heading(format!("{} (#{key})", poll.title));
-
-                    ui.label(&poll.description);
-                    ui.separator();
-                    let mut next_app_state = None;
-                    match &mut self.state {
-                        AppState::SignIn => {
-                            ui.label(
-                                "Type your name or choose a previous name \
-                                    from below and select \"SIGN IN\"",
-                            );
-                            ui.text_edit_singleline(&mut self.user_entry);
-                            if ui.button("SIGN IN").clicked() {
-                                next_app_state = Some(AppState::SignedIn {
-                                    user: self.user_entry.clone(),
-                                    responses: poll.init_responses(),
-                                });
-                                if !self.old_names.contains(&self.user_entry) {
-                                    self.old_names.push(self.user_entry.clone());
-                                }
-                                self.user_entry = "".to_string();
-                            }
-                            ui.separator();
-                            ScrollArea::vertical().show(ui, |ui| {
-                                for name in self.old_names.iter().rev() {
-                                    if ui.button(name).clicked() {
-                                        self.user_entry = name.to_string();
-                                    }
-                                }
-                            });
-                        }
-                        AppState::SignedIn {
-                            ref user,
-                            ref mut responses,
-                        } => {
-                            ui.horizontal(|ui| {
-                                ui.label(format!("Welcome, {user}!"));
-                                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                                    if ui.add(Button::new("Sign Out").small()).clicked() {
-                                        next_app_state = Some(AppState::SignIn);
-                                    }
-                                });
-                            });
-                            for (question, mut response) in
-                                poll.questions.iter().zip(responses.iter_mut())
-                            {
-                                ui.group(|ui| {
-                                    ui.label(&question.prompt);
-                                    match (&question.form, &mut response) {
-                                        (
-                                            Form::ChooseOne { options },
-                                            FormResponse::ChooseOne { choice },
-                                        ) => {
-                                            for (i, option) in options.iter().enumerate() {
-                                                let selected =
-                                                    choice.is_some() && choice.unwrap() == i as u8;
-                                                let mut button = Button::new(option);
-                                                if selected {
-                                                    button = button.fill(
-                                                        ui.ctx().style().visuals.selection.bg_fill,
-                                                    );
-                                                }
-                                                let response = ui.add(button);
-                                                if !selected {
-                                                    if response.clicked() {
-                                                        *choice = Some(i as u8);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-
-                            if ui.button("SUBMIT").clicked() {
-                                next_app_state = Some(AppState::Submitting { progress: None });
-                            }
-                        }
-                        AppState::Submitting { ref mut progress } => {
-                            ui.label("Your response is being submitted...");
-                            if let Some(start_time) = progress {
-                                if start_time.elapsed() > Duration::from_secs_f64(1.0) {
-                                    next_app_state = Some(AppState::SubmitConfirmation);
-                                }
-                            } else {
-                                *progress = Some(Instant::now());
-                            }
-                        }
-                        AppState::SubmitConfirmation => {
-                            ui.label("Your response has been submitted!. Thanks!");
-                            ui.label(
-                                "To change your response, sign in with the exact same name again.",
-                            );
-                            if ui.button("SIGN IN").clicked() {
-                                next_app_state = Some(AppState::SignIn);
-                            }
-                        }
-                    }
-                    if let Some(state) = next_app_state {
-                        self.state = state;
-                    }
+                    self.participation_state
+                        .process(ui, &mut self.sign_in_data, *key, poll);
                 }
                 PollState::NotFound { key } => {
                     ui.label(format!("No poll with ID #{key} was found 😥"));
@@ -452,14 +252,3 @@ impl eframe::App for App {
         });
     }
 }
-
-pub trait Pollable
-where
-    Self: Future + Sized + Unpin,
-{
-    fn poll(&mut self) -> Option<<Self as Future>::Output> {
-        future::block_on(future::poll_once(&mut *self))
-    }
-}
-
-impl<T> Pollable for T where T: Future + Sized + Unpin {}

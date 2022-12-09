@@ -1,23 +1,23 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct Question {
     pub prompt: String,
     pub form: Form,
 }
 
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub enum FormResponse {
     ChooseOne { choice: Option<u8> },
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Form {
     ChooseOne { options: Vec<String> },
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum PollStatus {
     SeekingResponses,
     Closed,
@@ -29,7 +29,7 @@ impl Default for PollStatus {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum ConditionDescription {
     AtLeast {
         minimum: u16,
@@ -38,20 +38,20 @@ pub enum ConditionDescription {
     },
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum ConditionState {
     Met,
     NotMet,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct PollResult {
     pub description: ConditionDescription,
     pub state: ConditionState,
     pub result: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Default, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Default, PartialEq, Clone, Debug)]
 pub struct Poll {
     pub title: String,
     pub description: String,
