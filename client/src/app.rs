@@ -311,13 +311,15 @@ impl eframe::App for App {
                                                     }
                                                 },
                                             );
-                                            if ui
-                                                .small_button("🗑")
-                                                .on_hover_text("Delete question")
-                                                .clicked()
-                                            {
-                                                delete_i = Some(question_i);
-                                            }
+                                            ui.add_enabled_ui(num_questions > 1, |ui| {
+                                                if ui
+                                                    .small_button("🗑")
+                                                    .on_hover_text("Delete question")
+                                                    .clicked()
+                                                {
+                                                    delete_i = Some(question_i);
+                                                }
+                                            });
                                         });
                                     });
                                 }
