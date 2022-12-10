@@ -417,10 +417,6 @@ impl eframe::App for App {
                                                     );
                                                 },
                                             );
-
-                                            // if ui.small_button("Add Option").clicked() {
-                                            //     new_option_index = Some(option_i + 1);
-                                            // }
                                         }
                                         if let Some(index) = delete_i {
                                             options.remove(index);
