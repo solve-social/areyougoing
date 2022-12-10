@@ -5,6 +5,8 @@ use areyougoing_shared::{Form, FormResponse, Poll};
 use egui::{Button, ScrollArea, Ui};
 use serde::{Deserialize, Serialize};
 
+const SIGN_IN_TEXT: &str = "SIGN_IN";
+
 #[derive(Deserialize, Serialize, PartialEq)]
 pub enum ParticipationState {
     SignedIn {
@@ -28,12 +30,12 @@ impl ParticipationState {
         let mut next_participation_state = None;
         match self {
             ParticipationState::SignIn => {
-                ui.label(
+                ui.label(format!(
                     "Type your name or choose a previous name \
-                                    from below and select \"SIGN IN\"",
-                );
+                                    from below and select \"{SIGN_IN_TEXT}\""
+                ));
                 ui.text_edit_singleline(&mut sign_in_data.user_entry);
-                if ui.button("SIGN IN").clicked() {
+                if ui.button(SIGN_IN_TEXT).clicked() {
                     next_participation_state = Some(ParticipationState::SignedIn {
                         user: sign_in_data.user_entry.clone(),
                         responses: poll.init_responses(),
@@ -99,7 +101,7 @@ impl ParticipationState {
             ParticipationState::SubmitConfirmation => {
                 ui.label("Your response has been submitted! Thanks!");
                 ui.label("To change your response, sign in with the exact same name again.");
-                if ui.button("SIGN IN").clicked() {
+                if ui.button(SIGN_IN_TEXT).clicked() {
                     next_participation_state = Some(ParticipationState::SignIn);
                 }
             }
