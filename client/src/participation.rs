@@ -97,7 +97,7 @@ impl ParticipationState {
                 ui.ctx().request_repaint_after(Duration::from_millis(100));
             }
             ParticipationState::SubmitConfirmation => {
-                ui.label("Your response has been submitted!. Thanks!");
+                ui.label("Your response has been submitted! Thanks!");
                 ui.label("To change your response, sign in with the exact same name again.");
                 if ui.button("SIGN IN").clicked() {
                     next_participation_state = Some(ParticipationState::SignIn);
