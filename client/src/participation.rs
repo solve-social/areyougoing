@@ -94,6 +94,7 @@ impl ParticipationState {
                 } else {
                     *progress = Some(Instant::now());
                 }
+                ui.ctx().request_repaint_after(Duration::from_millis(100));
             }
             ParticipationState::SubmitConfirmation => {
                 ui.label("Your response has been submitted!. Thanks!");
