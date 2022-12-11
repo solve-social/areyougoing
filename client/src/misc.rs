@@ -1,10 +1,17 @@
+use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures_lite::{future, Future};
 use gloo::events::EventListener;
+use gloo::{console::__macro::JsValue, net::http::RequestMode};
+use serde::{Deserialize, Serialize};
 use url::Url;
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 use web_sys::{Event, Window};
+use web_sys::{Request, RequestInit, Response};
 
 #[wasm_bindgen]
 extern "C" {
@@ -92,5 +99,82 @@ impl AtomicBoolExt for AtomicBool {
 
     fn get(&self) -> bool {
         self.load(Ordering::SeqCst)
+    }
+}
+
+enum SubmitterState {
+    None,
+    Submitting(JsFuture),
+    Converting(JsFuture),
+}
+
+pub struct Submitter<SendT, ReceiveT> {
+    path: String,
+    data: SendT,
+    state: SubmitterState,
+    receive_t: PhantomData<ReceiveT>,
+}
+
+use crate::SERVER_URL;
+
+impl<SendT: Serialize, ReceiveT: Debug + for<'de> Deserialize<'de>> Submitter<SendT, ReceiveT> {
+    pub fn new(path: &str, data: SendT) -> Self {
+        Self {
+            path: path.to_string(),
+            state: SubmitterState::None,
+            data,
+            receive_t: Default::default(),
+        }
+    }
+
+    pub fn poll(&mut self) -> Option<ReceiveT> {
+        let mut next_state = None;
+        match &mut self.state {
+            SubmitterState::None => {
+                let mut opts = RequestInit::new();
+                opts.method("POST");
+                opts.body(Some(&JsValue::from(
+                    serde_json::to_string(&self.data).unwrap(),
+                )));
+                opts.credentials(web_sys::RequestCredentials::Include);
+                opts.mode(RequestMode::Cors);
+                let url = format!("{SERVER_URL}/{}", self.path);
+                let request = Request::new_with_str_and_init(&url, &opts).unwrap();
+                request
+                    .headers()
+                    .set("Content-Type", "application/json")
+                    .unwrap();
+                next_state = Some(SubmitterState::Submitting(JsFuture::from(
+                    get_window().fetch_with_request(&request),
+                )));
+            }
+            SubmitterState::Submitting(ref mut future) => {
+                if let Some(result) = future.poll() {
+                    next_state = Some(SubmitterState::None);
+                    if let Ok(response) = result {
+                        assert!(response.is_instance_of::<Response>());
+                        let resp: Response = response.dyn_into().unwrap();
+                        if let Ok(json) = resp.json() {
+                            next_state = Some(SubmitterState::Converting(JsFuture::from(json)));
+                        }
+                    }
+                }
+            }
+            SubmitterState::Converting(ref mut future) => {
+                if let Some(result) = future.poll() {
+                    next_state = Some(SubmitterState::None);
+                    if let Ok(json) = result {
+                        if let Ok(submission_result) = serde_wasm_bindgen::from_value(json) {
+                            console_log!("Received from server: {submission_result:?}");
+                            return Some(submission_result);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(next_state) = next_state {
+            self.state = next_state;
+        }
+        None
     }
 }

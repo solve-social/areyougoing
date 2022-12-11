@@ -1,18 +1,10 @@
 use std::time::Duration;
 
-use crate::{
-    app::SignInData,
-    misc::{console_log, get_window, log, Pollable},
-    SERVER_URL,
-};
+use crate::{app::SignInData, misc::Submitter};
 use areyougoing_shared::{Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
 use derivative::Derivative;
 use egui::{Button, ScrollArea, Ui};
-use gloo::{console::__macro::JsValue, net::http::RequestMode};
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, Response};
 
 const SIGN_IN_TEXT: &str = "SIGN_IN";
 
@@ -29,15 +21,9 @@ pub enum ParticipationState {
         response: PollResponse,
         #[serde(skip)]
         #[derivative(PartialEq = "ignore")]
-        state: Option<SubmittingState>,
+        state: Option<Submitter<PollResponse, PollSubmissionResult>>,
     },
     SubmitConfirmation,
-}
-
-#[derive(Debug)]
-pub enum SubmittingState {
-    Sending(JsFuture),
-    Converting(JsFuture),
 }
 
 impl ParticipationState {
@@ -127,63 +113,18 @@ impl ParticipationState {
                 ref mut state,
             } => {
                 ui.label("Your response is being submitted...");
-                let mut next_submitting_state = None;
-                if let Some(state) = state {
-                    match state {
-                        SubmittingState::Sending(future) => {
-                            if let Some(result) = future.poll() {
-                                next_submitting_state = Some(None);
-                                if let Ok(response) = result {
-                                    assert!(response.is_instance_of::<Response>());
-                                    let resp: Response = response.dyn_into().unwrap();
-                                    if let Ok(json) = resp.json() {
-                                        next_submitting_state = Some(Some(
-                                            SubmittingState::Converting(JsFuture::from(json)),
-                                        ));
-                                    }
-                                }
+                if let Some(submitter) = state {
+                    if let Some(response) = submitter.poll() {
+                        match response {
+                            PollSubmissionResult::Success => {
+                                next_participation_state =
+                                    Some(ParticipationState::SubmitConfirmation);
                             }
-                        }
-                        SubmittingState::Converting(future) => {
-                            if let Some(result) = future.poll() {
-                                next_submitting_state = Some(None);
-                                if let Ok(json) = result {
-                                    if let Ok(submission_result) =
-                                        serde_wasm_bindgen::from_value(json)
-                                    {
-                                        console_log!("Received from server: {submission_result:?}");
-                                        match submission_result {
-                                            PollSubmissionResult::Success => {
-                                                next_participation_state =
-                                                    Some(ParticipationState::SubmitConfirmation);
-                                            }
-                                            PollSubmissionResult::Error => {}
-                                        }
-                                    }
-                                }
-                            }
+                            PollSubmissionResult::Error => {}
                         }
                     }
                 } else {
-                    let mut opts = RequestInit::new();
-                    opts.method("POST");
-                    opts.body(Some(&JsValue::from(
-                        serde_json::to_string(response).unwrap(),
-                    )));
-                    opts.credentials(web_sys::RequestCredentials::Include);
-                    opts.mode(RequestMode::Cors);
-                    let url = format!("{SERVER_URL}/submit");
-                    let request = Request::new_with_str_and_init(&url, &opts).unwrap();
-                    request
-                        .headers()
-                        .set("Content-Type", "application/json")
-                        .unwrap();
-                    *state = Some(SubmittingState::Sending(JsFuture::from(
-                        get_window().fetch_with_request(&request),
-                    )));
-                }
-                if let Some(next_state) = next_submitting_state {
-                    *state = next_state;
+                    *state = Some(Submitter::new("submit", response.clone()));
                 }
                 ui.ctx().request_repaint_after(Duration::from_millis(100));
             }

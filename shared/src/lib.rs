@@ -84,7 +84,7 @@ pub enum PollQueryResult {
     NotFound,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug, Default)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Default, Clone)]
 pub struct PollResponse {
     pub poll_id: u64,
     pub user: String,

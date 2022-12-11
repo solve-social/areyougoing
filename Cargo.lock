@@ -159,6 +159,7 @@ dependencies = [
 name = "areyougoing_client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "areyougoing_shared",
  "chrono",
  "console_error_panic_hook",
