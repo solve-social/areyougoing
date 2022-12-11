@@ -171,6 +171,19 @@ impl App {
             }
             _ => {}
         }
+        {
+            let mut new_state = None;
+
+            if let ParticipationState::Submitting { ref response, .. } = app.participation_state {
+                new_state = Some(ParticipationState::SignedIn {
+                    user: response.user.clone(),
+                    question_responses: response.responses.clone(),
+                });
+            }
+            if let Some(state) = new_state {
+                app.participation_state = state;
+            }
+        }
         console_log!("Initial PollState: {:?}", app.poll_state);
 
         app
@@ -210,8 +223,10 @@ impl eframe::App for App {
                     }
                 });
                 self.top_panel_inner_height = Some(response.response.rect.height());
-                if let ParticipationState::SignedIn { user, responses: _ } =
-                    &self.participation_state
+                if let ParticipationState::SignedIn {
+                    user,
+                    question_responses: _,
+                } = &self.participation_state
                 {
                     columns[1].with_layout(
                         Layout::top_down(Align::Min).with_cross_align(Align::Center),
@@ -494,6 +509,16 @@ impl eframe::App for App {
                         Creating { .. } => {
                             self.original_url.with_path("").push_to_window();
                         }
+                        Found { .. } => match &mut self.participation_state {
+                            ParticipationState::SignedIn {
+                                question_responses: ref mut responses,
+                                ..
+                            } => {
+                                // Temporary for debugging, with changing polls as we go
+                                *responses = Default::default();
+                            }
+                            _ => {}
+                        },
                         _ => {}
                     }
                 }

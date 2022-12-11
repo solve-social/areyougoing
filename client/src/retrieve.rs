@@ -1,4 +1,6 @@
-use crate::{app::PollState, misc::Pollable};
+#[allow(unused)]
+use crate::misc::{console_log, log};
+use crate::{app::PollState, misc::Pollable, SERVER_URL};
 use areyougoing_shared::PollQueryResult;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -25,7 +27,7 @@ impl RetrievingState {
                 let mut opts = RequestInit::new();
                 opts.method("GET");
                 opts.mode(RequestMode::Cors);
-                let url = format!("http://127.0.0.1:3000/{poll_key}");
+                let url = format!("{SERVER_URL}/{poll_key}");
                 let request = Request::new_with_str_and_init(&url, &opts).unwrap();
                 let window = web_sys::window().unwrap();
                 next_retreiving_state = Some(RetrievingState::Fetching(JsFuture::from(

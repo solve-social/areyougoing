@@ -1,10 +1,27 @@
-use std::{collections::HashMap, fs, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
-use areyougoing_shared::{Poll, PollQueryResult, PollStatus};
-use axum::{extract::Path, response::IntoResponse, routing::get, Extension, Json, Router};
+use areyougoing_shared::{
+    Form, Poll, PollQueryResult, PollResponse, PollStatus, PollSubmissionResult, Question,
+};
+use axum::{
+    extract::Path,
+    http::Method,
+    response::IntoResponse,
+    routing::{get, post},
+    Extension, Json, Router,
+};
+use headers::HeaderValue;
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
-use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tower_http::{
+    cors::CorsLayer,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -22,13 +39,27 @@ async fn main() {
     let app = Router::new()
         // .route("/", get(get_page))
         .route("/:poll_id", get(get_poll))
+        .route("/submit", post(submit))
+        .layer(
+            // see https://docs.rs/tower-http/latest/tower_http/cors/index.html
+            // for more details
+            //
+            // pay attention that for some request types like posting content-type: application/json
+            // it is required to add ".allow_headers([http::header::CONTENT_TYPE])"
+            // or see this issue https://github.com/tokio-rs/axum/issues/849
+            CorsLayer::new()
+                .allow_origin("http://127.0.0.1:5000".parse::<HeaderValue>().unwrap())
+                .allow_methods([Method::GET])
+                .allow_credentials(true)
+                .allow_headers([http::header::CONTENT_TYPE]),
+        )
         .layer(
             // logging
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         )
         .layer(Extension(config))
-        .layer(Extension(Arc::new(db)));
+        .layer(Extension(Arc::new(Mutex::new(db))));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
                                                          // let addr = SocketAddr::from((
@@ -40,6 +71,39 @@ async fn main() {
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
+}
+
+async fn submit(
+    Extension(db): Extension<Arc<Mutex<Db>>>,
+    Json(poll_response): Json<PollResponse>,
+) -> impl IntoResponse {
+    println!("{poll_response:?}");
+    Json(if let Ok(mut db) = db.lock() {
+        if let Some(poll_data) = db.polls.get_mut(&poll_response.poll_id) {
+            poll_data
+                .responses
+                .insert(poll_response.user.clone(), poll_response);
+            db.write();
+            PollSubmissionResult::Success
+        } else {
+            PollSubmissionResult::Error
+        }
+    } else {
+        PollSubmissionResult::Error
+    })
+}
+
+async fn get_poll(
+    Extension(db): Extension<Arc<Mutex<Db>>>,
+    Path(poll_id): Path<u64>,
+) -> impl IntoResponse {
+    Json(
+        if let Some(poll_data) = db.lock().unwrap().polls.get(&poll_id) {
+            PollQueryResult::Found(poll_data.poll.clone())
+        } else {
+            PollQueryResult::NotFound
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -54,11 +118,22 @@ impl Config {
 #[derive(Deserialize, Serialize)]
 struct PollData {
     poll: Poll,
+    responses: HashMap<String, PollResponse>,
 }
 
 #[derive(Deserialize, Serialize, Default)]
 struct Db {
     polls: HashMap<u64, PollData>,
+}
+
+impl Db {
+    pub fn write(&self) {
+        fs::write(
+            DB_PATH,
+            ron::ser::to_string_pretty(self, PrettyConfig::new()).unwrap(),
+        )
+        .unwrap();
+    }
 }
 
 const DB_PATH: &str = "data.ron";
@@ -81,26 +156,41 @@ impl Db {
                     expiration: None,
                     results: vec![],
                     status: PollStatus::SeekingResponses,
-                    questions: vec![],
+                    questions: vec![
+                        Question {
+                            prompt: "Are you going?".to_string(),
+                            form: Form::ChooseOne {
+                                options: vec!["Yes".to_string(), "No".to_string()],
+                            },
+                        },
+                        Question {
+                            prompt: "How are you arriving?".to_string(),
+                            form: Form::ChooseOne {
+                                options: vec![
+                                    "Driving own car".to_string(),
+                                    "Walking".to_string(),
+                                    "Uber".to_string(),
+                                ],
+                            },
+                        },
+                        Question {
+                            prompt: "Which restaurant would you prefer?".to_string(),
+                            form: Form::ChooseOne {
+                                options: vec![
+                                    "Chilis".to_string(),
+                                    "Burger King".to_string(),
+                                    "Cheddars".to_string(),
+                                    "Papasitos".to_string(),
+                                    "Taco Bell".to_string(),
+                                ],
+                            },
+                        },
+                    ],
                 },
+                responses: Default::default(),
             },
         );
-        fs::write(
-            DB_PATH,
-            ron::ser::to_string_pretty(&db, PrettyConfig::new()).unwrap(),
-        )
-        .unwrap();
+        db.write();
         db
     }
-}
-
-async fn get_poll(
-    Extension(db): Extension<Arc<Db>>,
-    Path(poll_id): Path<u64>,
-) -> impl IntoResponse {
-    Json(if let Some(poll_data) = db.polls.get(&poll_id) {
-        PollQueryResult::Found(poll_data.poll.clone())
-    } else {
-        PollQueryResult::NotFound
-    })
 }

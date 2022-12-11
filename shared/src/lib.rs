@@ -7,7 +7,7 @@ pub struct Question {
     pub form: Form,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub enum FormResponse {
     ChooseOne { choice: Option<u8> },
 }
@@ -78,8 +78,21 @@ pub struct PollQuery {
     pub id: u64,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum PollQueryResult {
     Found(Poll),
     NotFound,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Default)]
+pub struct PollResponse {
+    pub poll_id: u64,
+    pub user: String,
+    pub responses: Vec<FormResponse>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum PollSubmissionResult {
+    Error,
+    Success,
 }
