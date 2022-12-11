@@ -1,9 +1,13 @@
-use areyougoing_shared::{Form, Poll, Question};
+use std::time::Duration;
+
+use areyougoing_shared::{CreatePollResult, Form, Poll, Question};
 use derivative::Derivative;
 use egui::{Align, Layout, Pos2, Rect, ScrollArea, TextEdit, Ui, Vec2};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use wasm_bindgen_futures::JsFuture;
+
+use crate::misc::Submitter;
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
@@ -13,12 +17,14 @@ pub enum NewPoll {
         ui_data: CreatingUiData,
     },
     Submitting {
+        poll: Poll,
         #[serde(skip)]
         #[derivative(PartialEq = "ignore")]
-        state: Option<SubmittingState>,
+        state: Option<Submitter<Poll, CreatePollResult>>,
     },
     Submitted {
         key: u64,
+        copied: bool,
     },
 }
 
@@ -230,17 +236,49 @@ impl NewPoll {
                         );
                     }
                     ui.separator();
-                    if ui.button("SUBMIT").clicked() {}
+                    if ui.button("SUBMIT").clicked() {
+                        next_new_poll_state = Some(NewPoll::Submitting {
+                            poll: poll.clone(),
+                            state: None,
+                        });
+                    }
                 });
             }
-            NewPoll::Submitting { .. } => {
-                next_new_poll_state = Some(NewPoll::Submitted { key: 0 });
+            NewPoll::Submitting {
+                poll,
+                ref mut state,
+            } => {
+                if let Some(submitter) = state {
+                    if let Some(response) = submitter.poll() {
+                        match response {
+                            CreatePollResult::Success { key } => {
+                                next_new_poll_state =
+                                    Some(NewPoll::Submitted { key, copied: false });
+                            }
+                            CreatePollResult::Error => {}
+                        }
+                    }
+                } else {
+                    *state = Some(Submitter::new("new_poll", poll.clone()));
+                }
+                ui.ctx().request_repaint_after(Duration::from_millis(100));
             }
-            NewPoll::Submitted { key } => {
-                ui.label("Your new poll has been created!");
+            NewPoll::Submitted { key, .. } => {
+                ui.label("Your new poll has been created at:");
                 let mut link = original_url.as_ref().unwrap().clone();
                 link.set_path(&format!("{key}"));
-                ui.label(format!("Share it with this link: {link}"));
+                let link = format!("{link}");
+                ui.hyperlink(&link);
+
+                // Need to enable that one feature for clipboard access I think???
+                // but its conflicting with the per crate compile targets I think
+                // if ui.button("Copy Link to Clipboard").clicked() {
+                //     ui.output().copied_text = link;
+                //     *copied = true;
+                // }
+                // if *copied {
+                //     ui.label("Copied!");
+                // }
             }
         }
         if let Some(next_state) = next_new_poll_state {

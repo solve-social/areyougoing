@@ -93,6 +93,12 @@ pub struct PollResponse {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum PollSubmissionResult {
-    Error,
     Success,
+    Error,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum CreatePollResult {
+    Success { key: u64 },
+    Error,
 }

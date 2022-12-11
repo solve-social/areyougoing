@@ -102,12 +102,14 @@ impl AtomicBoolExt for AtomicBool {
     }
 }
 
+#[derive(Debug)]
 enum SubmitterState {
     None,
     Submitting(JsFuture),
     Converting(JsFuture),
 }
 
+#[derive(Debug)]
 pub struct Submitter<SendT, ReceiveT> {
     path: String,
     data: SendT,

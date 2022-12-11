@@ -2,12 +2,12 @@ use std::{
     collections::HashMap,
     fs,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use areyougoing_shared::{
-    Form, FormResponse, Poll, PollQueryResult, PollResponse, PollStatus, PollSubmissionResult,
-    Question,
+    CreatePollResult, Form, FormResponse, Poll, PollQueryResult, PollResponse, PollStatus,
+    PollSubmissionResult, Question,
 };
 use axum::{
     extract::Path,
@@ -95,23 +95,33 @@ async fn submit(
     })
 }
 
+fn get_unused_key(db: &MutexGuard<Db>) -> u64 {
+    let mut key = 1;
+    loop {
+        if !db.0.contains_key(&key) {
+            return key;
+        }
+        key += 1;
+    }
+}
+
 async fn new_poll(
     Extension(db): Extension<Arc<Mutex<Db>>>,
-    Json(poll_response): Json<PollResponse>,
+    Json(poll): Json<Poll>,
 ) -> impl IntoResponse {
-    println!("{poll_response:?}");
     Json(if let Ok(mut db) = db.lock() {
-        if let Some(poll_data) = db.0.get_mut(&poll_response.poll_id) {
-            poll_data
-                .responses
-                .insert(poll_response.user.clone(), poll_response.responses);
-            db.write();
-            PollSubmissionResult::Success
-        } else {
-            PollSubmissionResult::Error
-        }
+        let key = get_unused_key(&db);
+        println!("New Poll at {key}: {poll:?}");
+        db.0.insert(
+            key,
+            PollData {
+                poll,
+                responses: Default::default(),
+            },
+        );
+        CreatePollResult::Success { key }
     } else {
-        PollSubmissionResult::Error
+        CreatePollResult::Error
     })
 }
 
