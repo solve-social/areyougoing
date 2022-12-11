@@ -1,18 +1,14 @@
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::Duration;
-
-use crate::misc::{self, get_window, listen_in_window, AtomicBoolExt, UrlExt};
+use crate::misc::{console_log, get_window, listen_in_window, log, AtomicBoolExt, UrlExt};
 use crate::new_poll::NewPoll;
 use crate::participation::ParticipationState;
 use crate::retrieve::RetrievingState;
 use areyougoing_shared::Poll;
 use derivative::Derivative;
-use egui::panel::TopBottomSide;
-use egui::TopBottomPanel;
-use egui::{Align, CentralPanel, Layout, RichText};
-use misc::{console_log, log};
+use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 use url::Url;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
