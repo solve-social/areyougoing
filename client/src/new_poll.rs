@@ -15,7 +15,7 @@ pub enum NewPoll {
     Submitting {
         #[serde(skip)]
         #[derivative(PartialEq = "ignore")]
-        state: SubmittingState,
+        state: Option<SubmittingState>,
     },
     Submitted {
         key: u64,
@@ -32,15 +32,8 @@ pub struct CreatingUiData {
 
 #[derive(Debug)]
 pub enum SubmittingState {
-    None,
     Fetching(JsFuture),
     Converting(JsFuture),
-}
-
-impl Default for SubmittingState {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl NewPoll {
