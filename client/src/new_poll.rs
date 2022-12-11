@@ -174,8 +174,7 @@ impl NewPoll {
                                                     if ui
                                                         .small_button("➕")
                                                         .on_hover_text(
-                                                            "Insert option \
-                                                                            after this one",
+                                                            "Insert option after this one",
                                                         )
                                                         .clicked()
                                                     {
