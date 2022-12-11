@@ -41,6 +41,7 @@ async fn main() {
         // .route("/", get(get_page))
         .route("/:poll_id", get(get_poll))
         .route("/submit", post(submit))
+        .route("/new_poll", post(new_poll))
         .layer(
             // see https://docs.rs/tower-http/latest/tower_http/cors/index.html
             // for more details
@@ -75,6 +76,26 @@ async fn main() {
 }
 
 async fn submit(
+    Extension(db): Extension<Arc<Mutex<Db>>>,
+    Json(poll_response): Json<PollResponse>,
+) -> impl IntoResponse {
+    println!("{poll_response:?}");
+    Json(if let Ok(mut db) = db.lock() {
+        if let Some(poll_data) = db.0.get_mut(&poll_response.poll_id) {
+            poll_data
+                .responses
+                .insert(poll_response.user.clone(), poll_response.responses);
+            db.write();
+            PollSubmissionResult::Success
+        } else {
+            PollSubmissionResult::Error
+        }
+    } else {
+        PollSubmissionResult::Error
+    })
+}
+
+async fn new_poll(
     Extension(db): Extension<Arc<Mutex<Db>>>,
     Json(poll_response): Json<PollResponse>,
 ) -> impl IntoResponse {

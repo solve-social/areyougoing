@@ -61,17 +61,9 @@ pub struct CreatingUiData {
 #[derive(Deserialize, Serialize, Debug)]
 pub enum PollState {
     None,
-    Creating {
-        new_poll: Poll,
-        ui_data: CreatingUiData,
-    },
-    SubmittingPoll {
-        #[serde(skip)]
-        #[derivative(PartialEq = "ignore")]
-        state: SubmittingState,
-    },
-    SubmittedPoll {
-        key: u64,
+    NewPoll {
+        state: NewPoll,
+        poll: Poll,
     },
     Retrieving {
         key: u64,
@@ -84,6 +76,23 @@ pub enum PollState {
         poll: Poll,
     },
     NotFound {
+        key: u64,
+    },
+}
+
+#[derive(Derivative)]
+#[derivative(PartialEq)]
+#[derive(Deserialize, Serialize, Debug)]
+pub enum NewPoll {
+    Creating {
+        ui_data: CreatingUiData,
+    },
+    Submitting {
+        #[serde(skip)]
+        #[derivative(PartialEq = "ignore")]
+        state: SubmittingState,
+    },
+    Submitted {
         key: u64,
     },
 }
@@ -158,9 +167,11 @@ impl App {
                 };
             }
             (PollState::Found { key: _, poll: _ }, None) => {
-                app.poll_state = PollState::Creating {
-                    new_poll: Poll::default(),
-                    ui_data: Default::default(),
+                app.poll_state = PollState::NewPoll {
+                    state: NewPoll::Creating {
+                        ui_data: Default::default(),
+                    },
+                    poll: Default::default(),
                 };
             }
             (_, Some(url_key)) => {
@@ -210,16 +221,18 @@ impl eframe::App for App {
         top_panel.show(ctx, |ui| {
             ui.columns(3, |columns| {
                 let response = columns[0].with_layout(Layout::left_to_right(Align::Min), |ui| {
-                    let create_poll_text = if let PollState::Creating { .. } = &self.poll_state {
+                    let create_poll_text = if let PollState::NewPoll { .. } = &self.poll_state {
                         "Clear Poll"
                     } else {
                         "Create Poll"
                     };
                     if ui.small_button(create_poll_text).clicked() {
-                        next_poll_state = Some(PollState::Creating {
-                            new_poll: Poll::default(),
-                            ui_data: Default::default(),
-                        })
+                        next_poll_state = Some(PollState::NewPoll {
+                            state: NewPoll::Creating {
+                                ui_data: Default::default(),
+                            },
+                            poll: Default::default(),
+                        });
                     }
                 });
                 self.top_panel_inner_height = Some(response.response.rect.height());
@@ -246,248 +259,256 @@ impl eframe::App for App {
         CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| match &mut self.poll_state {
                 PollState::None => {
-                    next_poll_state = Some(PollState::Creating {
-                        new_poll: Poll::default(),
-                        ui_data: Default::default(),
+                    next_poll_state = Some(PollState::NewPoll {
+                        state: NewPoll::Creating {
+                            ui_data: Default::default(),
+                        },
+                        poll: Default::default(),
                     });
                 }
-                PollState::Creating {
-                    new_poll,
-                    ref mut ui_data,
-                } => {
-                    if let Some(rect) = ui_data.available_rect {
-                        if rect != ui.available_rect_before_wrap() {
-                            // Somehow the size of the window has changed, so reset/recalculate everything
-                            *ui_data = Default::default();
-                        }
-                    }
-                    ui_data.available_rect = Some(ui.available_rect_before_wrap());
-
-                    ui.heading("Create a new poll!");
-                    ui.separator();
-                    ScrollArea::vertical().show(ui, |ui| {
-                        ui.add(TextEdit::singleline(&mut new_poll.title).hint_text("Title"));
-                        ui.add(
-                            TextEdit::multiline(&mut new_poll.description)
-                                .hint_text("Description")
-                                .desired_rows(1),
-                        );
-
-                        let mut new_question_index = None;
-                        let mut delete_i = None;
-                        let mut swap_indices = None;
-
-                        let num_questions = new_poll.questions.len();
-                        for (question_i, question) in new_poll.questions.iter_mut().enumerate() {
-                            let response = ui.group(|ui| {
-                                let label_response =
-                                    ui.label(format!("Question {}", question_i + 1));
-
-                                if let Some(fields_rect) = ui_data.fields_rect {
-                                    let question_controls_rect = Rect {
-                                        min: Pos2 {
-                                            x: label_response.rect.right(),
-                                            y: label_response.rect.top(),
-                                        },
-                                        max: Pos2 {
-                                            x: fields_rect.right(),
-                                            y: label_response.rect.bottom(),
-                                        },
-                                    };
-                                    ui.allocate_ui_at_rect(question_controls_rect, |ui| {
-                                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                                            ui.spacing_mut().button_padding =
-                                                Vec2 { x: 0., y: 0.0 };
-                                            ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
-
-                                            ui.add_enabled_ui(num_questions > 1, |ui| {
-                                                if ui
-                                                    .small_button("🗑")
-                                                    .on_hover_text("Delete question")
-                                                    .clicked()
-                                                {
-                                                    delete_i = Some(question_i);
-                                                }
-                                            });
-                                            ui.add_enabled_ui(
-                                                question_i < num_questions - 1,
-                                                |ui| {
-                                                    if ui
-                                                        .small_button("⬇")
-                                                        .on_hover_text("Move question down")
-                                                        .clicked()
-                                                    {
-                                                        swap_indices =
-                                                            Some((question_i, question_i + 1));
-                                                    }
-                                                },
-                                            );
-                                            ui.add_enabled_ui(question_i != 0, |ui| {
-                                                if ui
-                                                    .small_button("⬆")
-                                                    .on_hover_text("Move question up")
-                                                    .clicked()
-                                                {
-                                                    swap_indices =
-                                                        Some((question_i, question_i - 1));
-                                                }
-                                            });
-                                        });
-                                    });
+                PollState::NewPoll { poll, state } => {
+                    let mut next_new_poll_state = None;
+                    match state {
+                        NewPoll::Creating { ref mut ui_data } => {
+                            if let Some(rect) = ui_data.available_rect {
+                                if rect != ui.available_rect_before_wrap() {
+                                    // Somehow the size of the window has changed, so reset/recalculate everything
+                                    *ui_data = Default::default();
                                 }
-                                let response = ui.add(
-                                    TextEdit::multiline(&mut question.prompt)
-                                        .desired_rows(1)
-                                        .hint_text("Prompt"),
+                            }
+                            ui_data.available_rect = Some(ui.available_rect_before_wrap());
+        
+                            ui.heading("Create a new poll!");
+                            ui.separator();
+                            ScrollArea::vertical().show(ui, |ui| {
+                                ui.add(TextEdit::singleline(&mut poll.title).hint_text("Title"));
+                                ui.add(
+                                    TextEdit::multiline(&mut poll.description)
+                                        .hint_text("Description")
+                                        .desired_rows(1),
                                 );
-                                ui_data.fields_rect = Some(response.rect);
-                                ui.separator();
-
-                                match &mut question.form {
-                                    Form::ChooseOneorNone { ref mut options } => {
-                                        let mut new_option_index = None;
-                                        let mut delete_i = None;
-                                        let mut swap_indices = None;
-                                        let num_options = options.len();
-                                        for (option_i, option) in options.iter_mut().enumerate() {
-                                            ui.allocate_ui(
-                                                ui_data.fields_rect.unwrap().size(),
-                                                |ui| {
-                                                    ui.with_layout(
-                                                        Layout::right_to_left(Align::Center),
+        
+                                let mut new_question_index = None;
+                                let mut delete_i = None;
+                                let mut swap_indices = None;
+        
+                                let num_questions = poll.questions.len();
+                                for (question_i, question) in poll.questions.iter_mut().enumerate() {
+                                    let response = ui.group(|ui| {
+                                        let label_response =
+                                            ui.label(format!("Question {}", question_i + 1));
+        
+                                        if let Some(fields_rect) = ui_data.fields_rect {
+                                            let question_controls_rect = Rect {
+                                                min: Pos2 {
+                                                    x: label_response.rect.right(),
+                                                    y: label_response.rect.top(),
+                                                },
+                                                max: Pos2 {
+                                                    x: fields_rect.right(),
+                                                    y: label_response.rect.bottom(),
+                                                },
+                                            };
+                                            ui.allocate_ui_at_rect(question_controls_rect, |ui| {
+                                                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                                    ui.spacing_mut().button_padding =
+                                                        Vec2 { x: 0., y: 0.0 };
+                                                    ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
+        
+                                                    ui.add_enabled_ui(num_questions > 1, |ui| {
+                                                        if ui
+                                                            .small_button("🗑")
+                                                            .on_hover_text("Delete question")
+                                                            .clicked()
+                                                        {
+                                                            delete_i = Some(question_i);
+                                                        }
+                                                    });
+                                                    ui.add_enabled_ui(
+                                                        question_i < num_questions - 1,
                                                         |ui| {
-                                                            ui.spacing_mut().button_padding =
-                                                                Vec2 { x: 0., y: 0.0 };
-                                                            ui.spacing_mut().item_spacing =
-                                                                Vec2 { x: 3., y: 1.0 };
-
-                                                            ui.add_enabled_ui(
-                                                                num_options > 1,
-                                                                |ui| {
-                                                                    if ui
-                                                                        .small_button("🗑")
-                                                                        .on_hover_text(
-                                                                            "Delete option",
-                                                                        )
-                                                                        .clicked()
-                                                                    {
-                                                                        delete_i = Some(option_i);
-                                                                    }
-                                                                },
-                                                            );
-
-                                                            ui.add_enabled_ui(
-                                                                option_i < num_options - 1,
-                                                                |ui| {
-                                                                    if ui
-                                                                        .small_button("⬇")
-                                                                        .on_hover_text(
-                                                                            "Move option down",
-                                                                        )
-                                                                        .clicked()
-                                                                    {
-                                                                        swap_indices = Some((
-                                                                            option_i,
-                                                                            option_i + 1,
-                                                                        ));
-                                                                    }
-                                                                },
-                                                            );
-                                                            ui.add_enabled_ui(
-                                                                option_i != 0,
-                                                                |ui| {
-                                                                    if ui
-                                                                        .small_button("⬆")
-                                                                        .on_hover_text(
-                                                                            "Move option up",
-                                                                        )
-                                                                        .clicked()
-                                                                    {
-                                                                        swap_indices = Some((
-                                                                            option_i,
-                                                                            option_i - 1,
-                                                                        ));
-                                                                    }
-                                                                },
-                                                            );
                                                             if ui
-                                                                .small_button("➕")
-                                                                .on_hover_text(
-                                                                    "Insert option \
-                                                                    after this one",
-                                                                )
+                                                                .small_button("⬇")
+                                                                .on_hover_text("Move question down")
                                                                 .clicked()
                                                             {
-                                                                new_option_index =
-                                                                    Some(option_i + 1);
+                                                                swap_indices =
+                                                                    Some((question_i, question_i + 1));
                                                             }
-                                                            ui.add(
-                                                                TextEdit::singleline(option)
-                                                                    .hint_text(format!(
-                                                                        "Option {}",
-                                                                        option_i + 1
-                                                                    )),
+                                                        },
+                                                    );
+                                                    ui.add_enabled_ui(question_i != 0, |ui| {
+                                                        if ui
+                                                            .small_button("⬆")
+                                                            .on_hover_text("Move question up")
+                                                            .clicked()
+                                                        {
+                                                            swap_indices =
+                                                                Some((question_i, question_i - 1));
+                                                        }
+                                                    });
+                                                });
+                                            });
+                                        }
+                                        let response = ui.add(
+                                            TextEdit::multiline(&mut question.prompt)
+                                                .desired_rows(1)
+                                                .hint_text("Prompt"),
+                                        );
+                                        ui_data.fields_rect = Some(response.rect);
+                                        ui.separator();
+        
+                                        match &mut question.form {
+                                            Form::ChooseOneorNone { ref mut options } => {
+                                                let mut new_option_index = None;
+                                                let mut delete_i = None;
+                                                let mut swap_indices = None;
+                                                let num_options = options.len();
+                                                for (option_i, option) in options.iter_mut().enumerate() {
+                                                    ui.allocate_ui(
+                                                        ui_data.fields_rect.unwrap().size(),
+                                                        |ui| {
+                                                            ui.with_layout(
+                                                                Layout::right_to_left(Align::Center),
+                                                                |ui| {
+                                                                    ui.spacing_mut().button_padding =
+                                                                        Vec2 { x: 0., y: 0.0 };
+                                                                    ui.spacing_mut().item_spacing =
+                                                                        Vec2 { x: 3., y: 1.0 };
+        
+                                                                    ui.add_enabled_ui(
+                                                                        num_options > 1,
+                                                                        |ui| {
+                                                                            if ui
+                                                                                .small_button("🗑")
+                                                                                .on_hover_text(
+                                                                                    "Delete option",
+                                                                                )
+                                                                                .clicked()
+                                                                            {
+                                                                                delete_i = Some(option_i);
+                                                                            }
+                                                                        },
+                                                                    );
+        
+                                                                    ui.add_enabled_ui(
+                                                                        option_i < num_options - 1,
+                                                                        |ui| {
+                                                                            if ui
+                                                                                .small_button("⬇")
+                                                                                .on_hover_text(
+                                                                                    "Move option down",
+                                                                                )
+                                                                                .clicked()
+                                                                            {
+                                                                                swap_indices = Some((
+                                                                                    option_i,
+                                                                                    option_i + 1,
+                                                                                ));
+                                                                            }
+                                                                        },
+                                                                    );
+                                                                    ui.add_enabled_ui(
+                                                                        option_i != 0,
+                                                                        |ui| {
+                                                                            if ui
+                                                                                .small_button("⬆")
+                                                                                .on_hover_text(
+                                                                                    "Move option up",
+                                                                                )
+                                                                                .clicked()
+                                                                            {
+                                                                                swap_indices = Some((
+                                                                                    option_i,
+                                                                                    option_i - 1,
+                                                                                ));
+                                                                            }
+                                                                        },
+                                                                    );
+                                                                    if ui
+                                                                        .small_button("➕")
+                                                                        .on_hover_text(
+                                                                            "Insert option \
+                                                                            after this one",
+                                                                        )
+                                                                        .clicked()
+                                                                    {
+                                                                        new_option_index =
+                                                                            Some(option_i + 1);
+                                                                    }
+                                                                    ui.add(
+                                                                        TextEdit::singleline(option)
+                                                                            .hint_text(format!(
+                                                                                "Option {}",
+                                                                                option_i + 1
+                                                                            )),
+                                                                    );
+                                                                },
                                                             );
                                                         },
                                                     );
-                                                },
-                                            );
+                                                }
+                                                if let Some(index) = delete_i {
+                                                    options.remove(index);
+                                                }
+                                                if options.len() == 0 {
+                                                    new_option_index = Some(0);
+                                                }
+                                                if let Some(index) = new_option_index {
+                                                    options.insert(index, "".to_string())
+                                                }
+                                                if let Some((a, b)) = swap_indices {
+                                                    options.swap(a, b);
+                                                }
+                                            }
                                         }
-                                        if let Some(index) = delete_i {
-                                            options.remove(index);
-                                        }
-                                        if options.len() == 0 {
-                                            new_option_index = Some(0);
-                                        }
-                                        if let Some(index) = new_option_index {
-                                            options.insert(index, "".to_string())
-                                        }
-                                        if let Some((a, b)) = swap_indices {
-                                            options.swap(a, b);
-                                        }
+                                    });
+                                    if question_i == 0 {
+                                        ui_data.question_group_rect = Some(response.response.rect);
+                                    }
+                                    if ui.small_button("Add Question").clicked() {
+                                        new_question_index = Some(question_i + 1);
                                     }
                                 }
+                                if let Some(index) = delete_i {
+                                    poll.questions.remove(index);
+                                }
+                                if let Some((a, b)) = swap_indices {
+                                    poll.questions.swap(a, b);
+                                }
+                                if poll.questions.len() == 0 {
+                                    new_question_index = Some(0);
+                                }
+                                if let Some(index) = new_question_index {
+                                    poll.questions.insert(
+                                        index,
+                                        Question {
+                                            prompt: "".to_string(),
+                                            form: Form::ChooseOneorNone {
+                                                options: Vec::new(),
+                                            },
+                                        },
+                                    );
+                                }
+                                ui.separator();
+                                if ui.button("SUBMIT").clicked() {}
                             });
-                            if question_i == 0 {
-                                ui_data.question_group_rect = Some(response.response.rect);
-                            }
-                            if ui.small_button("Add Question").clicked() {
-                                new_question_index = Some(question_i + 1);
-                            }
                         }
-                        if let Some(index) = delete_i {
-                            new_poll.questions.remove(index);
+                        NewPoll::Submitting { .. } => {
+                            next_new_poll_state = Some(NewPoll::Submitted { key: 0 });
                         }
-                        if let Some((a, b)) = swap_indices {
-                            new_poll.questions.swap(a, b);
+                        NewPoll::Submitted { key } => {
+                            ui.label("Your new poll has been created!");
+                            let mut link = self.original_url.as_ref().unwrap().clone();
+                            link.set_path(&format!("{key}"));
+                            ui.label(format!("Share it with this link: {link}"));
                         }
-                        if new_poll.questions.len() == 0 {
-                            new_question_index = Some(0);
                         }
-                        if let Some(index) = new_question_index {
-                            new_poll.questions.insert(
-                                index,
-                                Question {
-                                    prompt: "".to_string(),
-                                    form: Form::ChooseOneorNone {
-                                        options: Vec::new(),
-                                    },
-                                },
-                            );
+                        if let Some(next_state) = next_new_poll_state {
+                            *state = next_state;
                         }
-                        ui.separator();
-                        if ui.button("SUBMIT").clicked() {}
-                    });
-                }
-                PollState::SubmittingPoll { .. } => {
-                    next_poll_state = Some(PollState::SubmittedPoll { key: 0 });
-                }
-                PollState::SubmittedPoll { key } => {
-                    ui.label("Your new poll has been created!");
-                    let mut link = self.original_url.as_ref().unwrap().clone();
-                    link.set_path(&format!("{key}"));
-                    ui.label(format!("Share it with this link: {link}"));
-                }
+                    }
+                    
                 PollState::Retrieving { key, ref mut state } => {
                     ui.label(format!("Retreiving Poll #{key}"));
                     state.process(&mut next_poll_state, *key);
@@ -506,7 +527,7 @@ impl eframe::App for App {
                 {
                     use PollState::*;
                     match &state {
-                        Creating { .. } => {
+                        NewPoll { .. } => {
                             self.original_url.with_path("").push_to_window();
                         }
                         Found { .. } => match &mut self.participation_state {
