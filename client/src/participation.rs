@@ -88,8 +88,8 @@ impl ParticipationState {
                             ui.label(&question.prompt);
                             match (&question.form, &mut question_response) {
                                 (
-                                    Form::ChooseOne { options },
-                                    FormResponse::ChooseOne { choice },
+                                    Form::ChooseOneorNone { options },
+                                    FormResponse::ChooseOneOrNone(choice),
                                 ) => {
                                     for (i, option) in options.iter().enumerate() {
                                         let selected =

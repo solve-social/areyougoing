@@ -6,7 +6,8 @@ use std::{
 };
 
 use areyougoing_shared::{
-    Form, Poll, PollQueryResult, PollResponse, PollStatus, PollSubmissionResult, Question,
+    Form, FormResponse, Poll, PollQueryResult, PollResponse, PollStatus, PollSubmissionResult,
+    Question,
 };
 use axum::{
     extract::Path,
@@ -16,7 +17,7 @@ use axum::{
     Extension, Json, Router,
 };
 use headers::HeaderValue;
-use ron::ser::PrettyConfig;
+use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 use tower_http::{
     cors::CorsLayer,
@@ -79,10 +80,10 @@ async fn submit(
 ) -> impl IntoResponse {
     println!("{poll_response:?}");
     Json(if let Ok(mut db) = db.lock() {
-        if let Some(poll_data) = db.polls.get_mut(&poll_response.poll_id) {
+        if let Some(poll_data) = db.0.get_mut(&poll_response.poll_id) {
             poll_data
                 .responses
-                .insert(poll_response.user.clone(), poll_response);
+                .insert(poll_response.user.clone(), poll_response.responses);
             db.write();
             PollSubmissionResult::Success
         } else {
@@ -98,7 +99,7 @@ async fn get_poll(
     Path(poll_id): Path<u64>,
 ) -> impl IntoResponse {
     Json(
-        if let Some(poll_data) = db.lock().unwrap().polls.get(&poll_id) {
+        if let Some(poll_data) = db.lock().unwrap().0.get(&poll_id) {
             PollQueryResult::Found(poll_data.poll.clone())
         } else {
             PollQueryResult::NotFound
@@ -118,27 +119,29 @@ impl Config {
 #[derive(Deserialize, Serialize)]
 struct PollData {
     poll: Poll,
-    responses: HashMap<String, PollResponse>,
+    responses: HashMap<String, Vec<FormResponse>>,
 }
 
 #[derive(Deserialize, Serialize, Default)]
-struct Db {
-    polls: HashMap<u64, PollData>,
-}
+struct Db(HashMap<u64, PollData>);
+
+const DB_PATH: &str = "data.ron";
 
 impl Db {
     pub fn write(&self) {
         fs::write(
             DB_PATH,
-            ron::ser::to_string_pretty(self, PrettyConfig::new()).unwrap(),
+            ron::ser::to_string_pretty(
+                self,
+                PrettyConfig::new()
+                    .enumerate_arrays(true)
+                    .extensions(Extensions::all())
+                    .compact_arrays(true),
+            )
+            .unwrap(),
         )
         .unwrap();
     }
-}
-
-const DB_PATH: &str = "data.ron";
-
-impl Db {
     fn new() -> Self {
         if let Ok(string) = fs::read_to_string(DB_PATH) {
             if let Ok(db) = ron::de::from_str(&string) {
@@ -146,7 +149,7 @@ impl Db {
             }
         }
         let mut db = Self::default();
-        db.polls.insert(
+        db.0.insert(
             0,
             PollData {
                 poll: Poll {
@@ -159,13 +162,13 @@ impl Db {
                     questions: vec![
                         Question {
                             prompt: "Are you going?".to_string(),
-                            form: Form::ChooseOne {
+                            form: Form::ChooseOneorNone {
                                 options: vec!["Yes".to_string(), "No".to_string()],
                             },
                         },
                         Question {
                             prompt: "How are you arriving?".to_string(),
-                            form: Form::ChooseOne {
+                            form: Form::ChooseOneorNone {
                                 options: vec![
                                     "Driving own car".to_string(),
                                     "Walking".to_string(),
@@ -175,7 +178,7 @@ impl Db {
                         },
                         Question {
                             prompt: "Which restaurant would you prefer?".to_string(),
-                            form: Form::ChooseOne {
+                            form: Form::ChooseOneorNone {
                                 options: vec![
                                     "Chilis".to_string(),
                                     "Burger King".to_string(),

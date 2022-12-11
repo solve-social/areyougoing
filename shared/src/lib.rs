@@ -9,12 +9,12 @@ pub struct Question {
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub enum FormResponse {
-    ChooseOne { choice: Option<u8> },
+    ChooseOneOrNone(Option<u8>),
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Form {
-    ChooseOne { options: Vec<String> },
+    ChooseOneorNone { options: Vec<String> },
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
@@ -67,7 +67,7 @@ impl Poll {
         self.questions
             .iter()
             .map(|q| match q.form {
-                Form::ChooseOne { options: _ } => FormResponse::ChooseOne { choice: None },
+                Form::ChooseOneorNone { options: _ } => FormResponse::ChooseOneOrNone(None),
             })
             .collect::<Vec<_>>()
     }

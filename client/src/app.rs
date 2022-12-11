@@ -344,7 +344,7 @@ impl eframe::App for App {
                                 ui.separator();
 
                                 match &mut question.form {
-                                    Form::ChooseOne { ref mut options } => {
+                                    Form::ChooseOneorNone { ref mut options } => {
                                         let mut new_option_index = None;
                                         let mut delete_i = None;
                                         let mut swap_indices = None;
@@ -469,7 +469,7 @@ impl eframe::App for App {
                                 index,
                                 Question {
                                     prompt: "".to_string(),
-                                    form: Form::ChooseOne {
+                                    form: Form::ChooseOneorNone {
                                         options: Vec::new(),
                                     },
                                 },
