@@ -4,6 +4,7 @@ mod app;
 mod time;
 pub use app::App;
 pub mod misc;
+pub mod new_poll;
 pub mod participation;
 pub mod retrieve;
 
