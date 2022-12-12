@@ -6,8 +6,9 @@ use std::{
 };
 
 use areyougoing_shared::{
-    CreatePollResult, Form, FormResponse, Poll, PollQueryResult, PollResponse, PollStatus,
-    PollSubmissionResult, Question,
+    ConditionDescription, ConditionState, CreatePollResult, Form, FormResponse, Poll, PollProgress,
+    PollQueryResult, PollResponse, PollResult, PollStatus, PollSubmissionResult,
+    ProgressReportResult, Question,
 };
 use axum::{
     extract::Path,
@@ -42,6 +43,7 @@ async fn main() {
         .route("/:poll_id", get(get_poll))
         .route("/submit", post(submit))
         .route("/new_poll", post(new_poll))
+        .route("/progress", post(get_progress))
         .layer(
             // see https://docs.rs/tower-http/latest/tower_http/cors/index.html
             // for more details
@@ -85,6 +87,7 @@ async fn submit(
             poll_data
                 .responses
                 .insert(poll_response.user.clone(), poll_response.responses);
+            poll_data.update_results();
             db.write();
             PollSubmissionResult::Success
         } else {
@@ -138,6 +141,28 @@ async fn get_poll(
     )
 }
 
+async fn get_progress(
+    Extension(db): Extension<Arc<Mutex<Db>>>,
+    Json(key): Json<u64>,
+) -> impl IntoResponse {
+    Json(if let Ok(db) = db.lock() {
+        let poll_data = db.0.get(&key).unwrap();
+
+        ProgressReportResult::Success {
+            progress: PollProgress {
+                condition_states: poll_data
+                    .poll
+                    .results
+                    .iter()
+                    .map(|r| r.progress.clone())
+                    .collect(),
+            },
+        }
+    } else {
+        ProgressReportResult::Error
+    })
+}
+
 #[derive(Clone)]
 struct Config {}
 
@@ -151,6 +176,14 @@ impl Config {
 struct PollData {
     poll: Poll,
     responses: HashMap<String, Vec<FormResponse>>,
+}
+
+impl PollData {
+    pub fn update_results(&mut self) {
+        for result in self.poll.results.iter_mut() {
+            result.update(&self.responses);
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Default)]
@@ -173,58 +206,82 @@ impl Db {
         )
         .unwrap();
     }
-    fn new() -> Self {
+
+    fn get_from_file() -> Option<Self> {
         if let Ok(string) = fs::read_to_string(DB_PATH) {
             if let Ok(db) = ron::de::from_str(&string) {
-                return db;
+                return Some(db);
             }
         }
-        let mut db = Self::default();
-        db.0.insert(
-            0,
-            PollData {
-                poll: Poll {
-                    title: "Test Poll".to_string(),
-                    announcement: None,
-                    description: "Today, 3pm, you know where".to_string(),
-                    expiration: None,
-                    results: vec![],
-                    status: PollStatus::SeekingResponses,
-                    questions: vec![
-                        Question {
-                            prompt: "Are you going?".to_string(),
-                            form: Form::ChooseOneorNone {
-                                options: vec!["Yes".to_string(), "No".to_string()],
+        None
+    }
+
+    fn new() -> Self {
+        let mut db = Self::get_from_file().unwrap_or_else(|| {
+            let mut db = Self::default();
+            db.0.insert(
+                0,
+                PollData {
+                    poll: Poll {
+                        title: "Test Poll".to_string(),
+                        announcement: None,
+                        description: "Today, 3pm, you know where".to_string(),
+                        expiration: None,
+                        results: vec![PollResult {
+                            description: ConditionDescription::AtLeast {
+                                minimum: 2,
+                                question_index: 0,
+                                choice_index: 0,
                             },
-                        },
-                        Question {
-                            prompt: "How are you arriving?".to_string(),
-                            form: Form::ChooseOneorNone {
-                                options: vec![
-                                    "Driving own car".to_string(),
-                                    "Walking".to_string(),
-                                    "Uber".to_string(),
-                                ],
+                            progress: ConditionState::default(),
+                            result: Some("The party happens".to_string()),
+                        }],
+                        status: PollStatus::SeekingResponses,
+                        questions: vec![
+                            Question {
+                                prompt: "Are you going?".to_string(),
+                                form: Form::ChooseOneorNone {
+                                    options: vec!["Yes".to_string(), "No".to_string()],
+                                },
                             },
-                        },
-                        Question {
-                            prompt: "Which restaurant would you prefer?".to_string(),
-                            form: Form::ChooseOneorNone {
-                                options: vec![
-                                    "Chilis".to_string(),
-                                    "Burger King".to_string(),
-                                    "Cheddars".to_string(),
-                                    "Papasitos".to_string(),
-                                    "Taco Bell".to_string(),
-                                ],
+                            Question {
+                                prompt: "How are you arriving?".to_string(),
+                                form: Form::ChooseOneorNone {
+                                    options: vec![
+                                        "Driving own car".to_string(),
+                                        "Walking".to_string(),
+                                        "Uber".to_string(),
+                                    ],
+                                },
                             },
-                        },
-                    ],
+                            Question {
+                                prompt: "Which restaurant would you prefer?".to_string(),
+                                form: Form::ChooseOneorNone {
+                                    options: vec![
+                                        "Chilis".to_string(),
+                                        "Burger King".to_string(),
+                                        "Cheddars".to_string(),
+                                        "Papasitos".to_string(),
+                                        "Taco Bell".to_string(),
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    responses: Default::default(),
                 },
-                responses: Default::default(),
-            },
-        );
+            );
+            db
+        });
+
+        db.update_all_results();
         db.write();
         db
+    }
+
+    fn update_all_results(&mut self) {
+        for poll_data in self.0.values_mut() {
+            poll_data.update_results();
+        }
     }
 }

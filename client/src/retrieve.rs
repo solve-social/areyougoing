@@ -58,6 +58,9 @@ impl RetrievingState {
                                     *next_poll_state = Some(PollState::Found {
                                         poll,
                                         key: poll_key,
+                                        poll_progress_fetch: None,
+                                        last_fetch: None,
+                                        stale: true,
                                     });
                                 }
                                 PollQueryResult::NotFound => {

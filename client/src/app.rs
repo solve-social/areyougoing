@@ -1,9 +1,15 @@
-use crate::misc::{console_log, get_window, listen_in_window, log, AtomicBoolExt, UrlExt};
+use crate::misc::{
+    console_log, get_window, listen_in_window, log, AtomicBoolExt, Submitter, UrlExt,
+};
 use crate::new_poll::NewPoll;
 use crate::participation::ParticipationState;
 use crate::retrieve::RetrievingState;
-use areyougoing_shared::Poll;
+use crate::time::Instant;
+use areyougoing_shared::{
+    ConditionDescription, ConditionState, Form, Poll, PollResult, ProgressReportResult, Question,
+};
 use derivative::Derivative;
+use egui::Color32;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
@@ -49,6 +55,13 @@ pub enum PollState {
     Found {
         key: u64,
         poll: Poll,
+        #[serde(skip)]
+        #[derivative(PartialEq = "ignore")]
+        last_fetch: Option<Instant>,
+        #[serde(skip)]
+        #[derivative(PartialEq = "ignore")]
+        poll_progress_fetch: Option<Submitter<u64, ProgressReportResult>>,
+        stale: bool,
     },
     NotFound {
         key: u64,
@@ -118,13 +131,13 @@ impl App {
         };
 
         match (&mut app.poll_state, url_key) {
-            (PollState::Found { key, poll: _ }, Some(url_key)) if *key != url_key => {
+            (PollState::Found { key, .. }, Some(url_key)) if *key != url_key => {
                 app.poll_state = PollState::Retrieving {
                     key: url_key,
                     state: RetrievingState::None,
                 };
             }
-            (PollState::Found { key: _, poll: _ }, None) => {
+            (PollState::Found { .. }, None) => {
                 app.poll_state = PollState::NewPoll {
                     state: NewPoll::Creating {
                         ui_data: Default::default(),
@@ -233,9 +246,100 @@ impl eframe::App for App {
                     // Make sure the UI keeps updating in order to keep polling the fetch process
                     ui.ctx().request_repaint_after(Duration::from_millis(100));
                 }
-                PollState::Found { key, poll } => {
+                PollState::Found {
+                    key,
+                    poll,
+                    poll_progress_fetch,
+                    last_fetch,
+                    ref mut stale,
+                } => {
+                    ui.heading(format!("{} (#{key})", poll.title));
+
+                    ui.label(&poll.description);
+
+                    for PollResult {
+                        description,
+                        result,
+                        progress,
+                    } in poll.results.iter()
+                    {
+                        // let defaults = ("", ui.ctx().style().visuals.text_color(), "");
+                        let (description_text, state_result, color) = match description {
+                            ConditionDescription::AtLeast {
+                                minimum,
+                                question_index,
+                                choice_index,
+                            } => {
+                                let Question { prompt, form } =
+                                    &poll.questions[*question_index as usize];
+                                let choice = match form {
+                                    Form::ChooseOneorNone { options } => {
+                                        &options[*choice_index as usize]
+                                    }
+                                };
+                                let (state_text, color) = match progress {
+                                    ConditionState::MetOrNotMet(met) => (
+                                        (if *met { "☑" } else { "☐" }).to_string(),
+                                        if *met { Color32::GREEN } else { Color32::RED },
+                                    ),
+                                    ConditionState::Progress(progress) => (
+                                        format!("{progress}/{minimum}"),
+                                        if progress >= minimum {
+                                            Color32::GREEN
+                                        } else {
+                                            Color32::RED
+                                        },
+                                    ),
+                                };
+                                let desc = format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
+                                (desc, state_text, color)
+                            }
+                        };
+                        let mut output = format!("{state_result}: {description_text}");
+                        if let Some(result) = result {
+                            output = format!("{output} ➡ \"{result}\"");
+                        }
+                        ui.add_enabled_ui(!*stale, |ui| {
+                            ui.colored_label(color, output);
+                        });
+                    }
+
+                    let mut fetch_complete = false;
+                    if let Some(fetch) = poll_progress_fetch {
+                        if let Some(progress) = fetch.poll() {
+                            match progress {
+                                ProgressReportResult::Success { progress } => {
+                                    for (
+                                        PollResult {
+                                            progress: condition_state,
+                                            ..
+                                        },
+                                        new_condition_state,
+                                    ) in poll.results.iter_mut().zip(progress.condition_states)
+                                    {
+                                        *condition_state = new_condition_state;
+                                    }
+                                    *stale = false;
+                                }
+                                ProgressReportResult::Error => {}
+                            }
+                            fetch_complete = true;
+                        }
+                    } else {
+                        if *stale
+                            || last_fetch.is_none()
+                            || last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.0)
+                        {
+                            *poll_progress_fetch = Some(Submitter::new("progress", *key));
+                            *last_fetch = Some(Instant::now());
+                        }
+                    }
+                    if fetch_complete {
+                        *poll_progress_fetch = None;
+                    }
+                    ui.ctx().request_repaint_after(Duration::from_millis(200));
                     self.participation_state
-                        .process(ui, &mut self.sign_in_data, *key, poll);
+                        .process(ui, &mut self.sign_in_data, *key, poll, stale);
                 }
                 PollState::NotFound { key } => {
                     ui.label(format!("No poll with ID #{key} was found 😥"));

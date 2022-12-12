@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -40,15 +42,69 @@ pub enum ConditionDescription {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum ConditionState {
-    Met,
-    NotMet,
+    MetOrNotMet(bool),
+    Progress(u16),
+}
+
+impl Default for ConditionState {
+    fn default() -> Self {
+        ConditionState::MetOrNotMet(false)
+    }
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct PollResult {
     pub description: ConditionDescription,
-    pub state: ConditionState,
     pub result: Option<String>,
+    pub progress: ConditionState,
+}
+
+impl PollResult {
+    pub fn update(&mut self, responses: &HashMap<String, Vec<FormResponse>>) {
+        let PollResult {
+            description,
+            result: _,
+            ref mut progress,
+        } = self;
+
+        match description {
+            ConditionDescription::AtLeast {
+                minimum,
+                question_index,
+                choice_index,
+            } => {
+                let mut count = 0;
+                for poll_response in responses.values() {
+                    match poll_response.get(*question_index).unwrap() {
+                        FormResponse::ChooseOneOrNone(choice) => {
+                            if let Some(chosen_index) = choice {
+                                if chosen_index == choice_index {
+                                    count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                let condition_met = count >= *minimum;
+                if condition_met {
+                    println!("Condition met: {description:?}");
+                }
+                match progress {
+                    ConditionState::MetOrNotMet(met) => {
+                        *met = condition_met;
+                    }
+                    ConditionState::Progress(progress) => {
+                        *progress = count;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub struct PollProgress {
+    pub condition_states: Vec<ConditionState>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
@@ -100,5 +156,11 @@ pub enum PollSubmissionResult {
 #[derive(Deserialize, Serialize, Debug)]
 pub enum CreatePollResult {
     Success { key: u64 },
+    Error,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum ProgressReportResult {
+    Success { progress: PollProgress },
     Error,
 }

@@ -27,10 +27,14 @@ pub enum ParticipationState {
 }
 
 impl ParticipationState {
-    pub fn process(&mut self, ui: &mut Ui, sign_in_data: &mut SignInData, key: u64, poll: &Poll) {
-        ui.heading(format!("{} (#{key})", poll.title));
-
-        ui.label(&poll.description);
+    pub fn process(
+        &mut self,
+        ui: &mut Ui,
+        sign_in_data: &mut SignInData,
+        key: u64,
+        poll: &Poll,
+        stale: &mut bool,
+    ) {
         ui.separator();
         let mut next_participation_state = None;
         match self {
@@ -115,6 +119,7 @@ impl ParticipationState {
                 ui.label("Your response is being submitted...");
                 if let Some(submitter) = state {
                     if let Some(response) = submitter.poll() {
+                        *stale = true;
                         match response {
                             PollSubmissionResult::Success => {
                                 next_participation_state =
