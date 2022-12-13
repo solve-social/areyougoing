@@ -55,7 +55,7 @@ impl Default for ConditionState {
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct PollResult {
     pub description: ConditionDescription,
-    pub result: Option<String>,
+    pub result: String,
     pub progress: ConditionState,
 }
 

@@ -141,6 +141,7 @@ impl App {
                 app.poll_state = PollState::NewPoll {
                     state: NewPoll::Creating {
                         ui_data: Default::default(),
+                        show_conditions: false,
                     },
                     poll: Default::default(),
                 };
@@ -201,6 +202,7 @@ impl eframe::App for App {
                         next_poll_state = Some(PollState::NewPoll {
                             state: NewPoll::Creating {
                                 ui_data: Default::default(),
+                                show_conditions: false,
                             },
                             poll: Default::default(),
                         });
@@ -233,6 +235,7 @@ impl eframe::App for App {
                     next_poll_state = Some(PollState::NewPoll {
                         state: NewPoll::Creating {
                             ui_data: Default::default(),
+                            show_conditions: false,
                         },
                         poll: Default::default(),
                     });
@@ -296,7 +299,7 @@ impl eframe::App for App {
                             }
                         };
                         let mut output = format!("{state_result}: {description_text}");
-                        if let Some(result) = result {
+                        if !result.is_empty() {
                             output = format!("{output} ➡ \"{result}\"");
                         }
                         ui.add_enabled_ui(!*stale, |ui| {

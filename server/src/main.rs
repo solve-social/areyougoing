@@ -234,7 +234,7 @@ impl Db {
                                 choice_index: 0,
                             },
                             progress: ConditionState::default(),
-                            result: Some("The party happens".to_string()),
+                            result: "The party happens".to_string(),
                         }],
                         status: PollStatus::SeekingResponses,
                         questions: vec![
