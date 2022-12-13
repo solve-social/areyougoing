@@ -61,7 +61,7 @@ impl NewPoll {
                     ui.add(TextEdit::singleline(&mut poll.title).hint_text("Title"));
                     ui.add(
                         TextEdit::multiline(&mut poll.description)
-                            .hint_text("Description")
+                            .hint_text("Description (Optional)")
                             .desired_rows(1),
                     );
 
