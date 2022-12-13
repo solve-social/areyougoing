@@ -3,10 +3,10 @@ use std::time::Duration;
 use crate::{app::SignInData, misc::Submitter};
 use areyougoing_shared::{Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
 use derivative::Derivative;
-use egui::{Button, ScrollArea, Ui};
+use egui::{Button, ScrollArea, TextEdit, Ui};
 use serde::{Deserialize, Serialize};
 
-const SIGN_IN_TEXT: &str = "SIGN_IN";
+const SIGN_IN_TEXT: &str = "SIGN IN";
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
@@ -39,11 +39,15 @@ impl ParticipationState {
         let mut next_participation_state = None;
         match self {
             ParticipationState::SignIn => {
-                ui.label(format!(
-                    "Type your name or choose a previous name \
-                                    from below and select \"{SIGN_IN_TEXT}\""
-                ));
-                ui.text_edit_singleline(&mut sign_in_data.user_entry);
+                let mut sign_in_hint = "Type a name".to_string();
+                if sign_in_data.old_names.len() > 0 {
+                    sign_in_hint += " or choose one from below";
+                }
+                // ui.label(format!(
+                //     "Type your name or choose a previous name \
+                //                     from below and select \"{SIGN_IN_TEXT}\""
+                // ));
+                ui.add(TextEdit::singleline(&mut sign_in_data.user_entry).hint_text(sign_in_hint));
                 if ui.button(SIGN_IN_TEXT).clicked() {
                     next_participation_state = Some(ParticipationState::SignedIn {
                         user: sign_in_data.user_entry.clone(),
