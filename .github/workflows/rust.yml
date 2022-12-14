@@ -57,7 +57,7 @@ jobs:
           args: --lib -p areyougoing_server
 
   test-client:
-    name: Test Suite Server
+    name: Test Suite Client
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
