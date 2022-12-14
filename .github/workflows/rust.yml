@@ -54,7 +54,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --lib -p areyougoing_server
+          args: -p areyougoing_server
 
   test-client:
     name: Test Suite Client
