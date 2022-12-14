@@ -109,7 +109,9 @@ impl NewPoll {
             NewPoll::Submitted { key, .. } => {
                 ui.label("Your new poll has been created at:");
                 let mut link = original_url.as_ref().unwrap().clone();
-                link.set_path(&format!("{key}"));
+
+                link.set_path("");
+                link.set_query(Some(&format!("poll_key={key}")));
                 let link = format!("{link}");
                 ui.hyperlink(&link);
 
