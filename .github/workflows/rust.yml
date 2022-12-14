@@ -9,8 +9,8 @@ env:
   RUSTFLAGS: --cfg=web_sys_unstable_apis
 
 jobs:
-  check:
-    name: Check
+  check-server:
+    name: Check Server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -22,10 +22,10 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --all-features
+          args: --all-features -p areyougoing_server
 
-  check_wasm:
-    name: Check wasm32
+  check-client:
+    name: Check Client
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -40,8 +40,8 @@ jobs:
           command: check
           args: --all-features --lib --target wasm32-unknown-unknown -p areyougoing_client
 
-  test:
-    name: Test Suite
+  test-server:
+    name: Test Suite Server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -54,7 +54,24 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --lib
+          args: --lib -p areyougoing_server
+
+  test-client:
+    name: Test Suite Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          target: wasm32-unknown-unknown
+          override: true
+      - run: sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libspeechd-dev libxkbcommon-dev libssl-dev
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --lib -p areyougoing_client # do we need --target wasm32-unknown-unknown here?
 
   fmt:
     name: Rustfmt
@@ -72,8 +89,8 @@ jobs:
           command: fmt
           args: --all -- --check
 
-  clippy:
-    name: Clippy
+  clippy-server:
+    name: Clippy Server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -86,7 +103,24 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: -p areyougoing_server -- -D warnings
+
+  clippy-client:
+    name: Clippy Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          target: wasm32-unknown-unknown
+          override: true
+          components: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -p areyougoing_client -- -D warnings
 
   trunk:
     name: trunk
@@ -96,7 +130,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.65.0
+          toolchain: nightly # The egui template uses the latest stable version here (currently 1.65.0)
           target: wasm32-unknown-unknown
           override: true
       - name: Download and install Trunk binary
