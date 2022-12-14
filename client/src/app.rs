@@ -185,6 +185,8 @@ impl eframe::App for App {
         }
         let mut next_poll_state = None;
 
+        // TopBottomPanel::bottom("bottom").show(ctx, |ui| ui.label(SERVER_URL));
+
         let mut top_panel =
             TopBottomPanel::new(TopBottomSide::Top, "top_panel").show_separator_line(false);
         if let Some(height) = self.top_panel_inner_height {
