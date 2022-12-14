@@ -25,6 +25,7 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use local_ip_address::local_ip;
 
 #[tokio::main]
 async fn main() {
@@ -65,11 +66,11 @@ async fn main() {
         .layer(Extension(config))
         .layer(Extension(Arc::new(Mutex::new(db))));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
-                                                         // let addr = SocketAddr::from((
-                                                         //     local_ip().expect("Failed to get local ip address"),
-                                                         //     BIND_PORT,
-                                                         // ));
+    // let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
+    let addr = SocketAddr::from((
+        local_ip().expect("Failed to get local ip address"),
+        3000,
+    ));
     println!("Listening on http://{}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
