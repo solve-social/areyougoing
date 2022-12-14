@@ -11,7 +11,7 @@ forced-target = "wasm32-unknown-unknown"
 
 [dependencies]
 egui = "0.20"
-eframe = { version = "0.20", default-dependencies = false, features = [
+eframe = { version = "0.20", features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
