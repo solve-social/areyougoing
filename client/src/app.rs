@@ -275,8 +275,7 @@ impl eframe::App for App {
                                 question_index,
                                 choice_index,
                             } => {
-                                let Question { prompt, form } =
-                                    &poll.questions[*question_index as usize];
+                                let Question { prompt, form } = &poll.questions[*question_index];
                                 let choice = match form {
                                     Form::ChooseOneorNone { options } => {
                                         &options[*choice_index as usize]
@@ -330,14 +329,12 @@ impl eframe::App for App {
                             }
                             fetch_complete = true;
                         }
-                    } else {
-                        if *stale
-                            || last_fetch.is_none()
-                            || last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.0)
-                        {
-                            *poll_progress_fetch = Some(Submitter::new("progress", *key));
-                            *last_fetch = Some(Instant::now());
-                        }
+                    } else if *stale
+                        || last_fetch.is_none()
+                        || last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.0)
+                    {
+                        *poll_progress_fetch = Some(Submitter::new("progress", *key));
+                        *last_fetch = Some(Instant::now());
                     }
                     if fetch_complete {
                         *poll_progress_fetch = None;
@@ -357,16 +354,16 @@ impl eframe::App for App {
                         NewPoll { .. } => {
                             self.original_url.with_path("").push_to_window();
                         }
-                        Found { .. } => match &mut self.participation_state {
-                            ParticipationState::SignedIn {
+                        Found { .. } => {
+                            if let ParticipationState::SignedIn {
                                 question_responses: ref mut responses,
                                 ..
-                            } => {
+                            } = &mut self.participation_state
+                            {
                                 // Temporary for debugging, with changing polls as we go
                                 *responses = Default::default();
                             }
-                            _ => {}
-                        },
+                        }
                         _ => {}
                     }
                 }

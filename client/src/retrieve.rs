@@ -50,26 +50,24 @@ impl RetrievingState {
                 }
             }
             RetrievingState::Converting(js_future) => {
-                if let Some(result) = js_future.poll() {
-                    if let Ok(json) = result {
-                        if let Ok(poll_query_result) = serde_wasm_bindgen::from_value(json) {
-                            match poll_query_result {
-                                PollQueryResult::Found(poll) => {
-                                    *next_poll_state = Some(PollState::Found {
-                                        poll,
-                                        key: poll_key,
-                                        poll_progress_fetch: None,
-                                        last_fetch: None,
-                                        stale: true,
-                                    });
-                                }
-                                PollQueryResult::NotFound => {
-                                    *next_poll_state = Some(PollState::NotFound { key: poll_key });
-                                }
+                if let Some(Ok(json)) = js_future.poll() {
+                    if let Ok(poll_query_result) = serde_wasm_bindgen::from_value(json) {
+                        match poll_query_result {
+                            PollQueryResult::Found(poll) => {
+                                *next_poll_state = Some(PollState::Found {
+                                    poll,
+                                    key: poll_key,
+                                    poll_progress_fetch: None,
+                                    last_fetch: None,
+                                    stale: true,
+                                });
                             }
-                        } else {
-                            next_retreiving_state = Some(RetrievingState::None);
+                            PollQueryResult::NotFound => {
+                                *next_poll_state = Some(PollState::NotFound { key: poll_key });
+                            }
                         }
+                    } else {
+                        next_retreiving_state = Some(RetrievingState::None);
                     }
                 }
             }

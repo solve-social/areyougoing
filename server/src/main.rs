@@ -70,7 +70,7 @@ async fn main() {
                                                          //     local_ip().expect("Failed to get local ip address"),
                                                          //     BIND_PORT,
                                                          // ));
-    println!("Listening on http://{}", addr);
+    println!("Listening on http://{addr}");
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await

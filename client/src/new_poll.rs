@@ -257,7 +257,7 @@ impl NewPoll {
                         if let Some(index) = delete_i {
                             options.remove(index);
                         }
-                        if options.len() == 0 {
+                        if options.is_empty() {
                             new_option_index = Some(0);
                         }
                         if let Some(index) = new_option_index {
@@ -282,7 +282,7 @@ impl NewPoll {
         if let Some((a, b)) = swap_indices {
             poll.questions.swap(a, b);
         }
-        if poll.questions.len() == 0 {
+        if poll.questions.is_empty() {
             new_question_index = Some(0);
         }
         if let Some(index) = new_question_index {
@@ -366,7 +366,7 @@ impl NewPoll {
                 let mut selected = match &result.description {
                     ConditionDescription::AtLeast { .. } => 0,
                 };
-                let selected_before = selected.clone();
+                let selected_before = selected;
                 const TYPES: &[&str] = &["At Least X Specific Responses"];
                 ui.allocate_ui(field_shape, |ui| {
                     ComboBox::new(format!("condition_type_{result_i}"), "Condition Type")

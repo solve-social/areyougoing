@@ -53,7 +53,7 @@ pub trait UrlExt {
             .expect("no global `window` exists")
             .history()
             .expect("Failed to access browser history")
-            .push_state_with_url(&JsValue::NULL, "", Some(&self.get().to_string()))
+            .push_state_with_url(&JsValue::NULL, "", Some(self.get().as_ref()))
             .expect("Failed to set URL");
     }
 }

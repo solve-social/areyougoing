@@ -40,7 +40,7 @@ impl ParticipationState {
         match self {
             ParticipationState::SignIn => {
                 let mut sign_in_hint = "Type a name".to_string();
-                if sign_in_data.old_names.len() > 0 {
+                if !sign_in_data.old_names.is_empty() {
                     sign_in_hint += " or choose one from below";
                 }
                 // ui.label(format!(
@@ -71,7 +71,7 @@ impl ParticipationState {
                 user,
                 ref mut question_responses,
             } => {
-                if question_responses.len() == 0 {
+                if question_responses.is_empty() {
                     *question_responses = poll.init_responses();
                 }
                 ScrollArea::vertical().show(ui, |ui| {
@@ -94,10 +94,8 @@ impl ParticipationState {
                                                 .fill(ui.ctx().style().visuals.selection.bg_fill);
                                         }
                                         let response = ui.add(button);
-                                        if !selected {
-                                            if response.clicked() {
-                                                *choice = Some(i as u8);
-                                            }
+                                        if !selected && response.clicked() {
+                                            *choice = Some(i as u8);
                                         }
                                     }
                                 }
