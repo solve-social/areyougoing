@@ -27,7 +27,7 @@ impl RetrievingState {
                 let mut opts = RequestInit::new();
                 opts.method("GET");
                 opts.mode(RequestMode::Cors);
-                let url = format!("{SERVER_URL}/{poll_key}");
+                let url = format!("{SERVER_URL}?poll_key={poll_key}");
                 let request = Request::new_with_str_and_init(&url, &opts).unwrap();
                 let window = web_sys::window().unwrap();
                 next_retreiving_state = Some(RetrievingState::Fetching(JsFuture::from(

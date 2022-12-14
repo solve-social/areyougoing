@@ -11,7 +11,7 @@ use areyougoing_shared::{
     ProgressReportResult, Question,
 };
 use axum::{
-    extract::Path,
+    extract::Query,
     http::Method,
     response::IntoResponse,
     routing::{get, post},
@@ -126,12 +126,17 @@ async fn new_poll(
     })
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct GetPollQuery {
+    poll_key: u64,
+}
+
 async fn get_poll(
     Extension(db): Extension<Arc<Mutex<Db>>>,
-    Path(poll_id): Path<u64>,
+    Query(get_poll_query): Query<GetPollQuery>,
 ) -> impl IntoResponse {
     Json(
-        if let Some(poll_data) = db.lock().unwrap().0.get(&poll_id) {
+        if let Some(poll_data) = db.lock().unwrap().0.get(&get_poll_query.poll_key) {
             PollQueryResult::Found(poll_data.poll.clone())
         } else {
             PollQueryResult::NotFound
