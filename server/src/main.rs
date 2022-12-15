@@ -17,12 +17,11 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use headers::HeaderValue;
 use local_ip_address::local_ip;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 use tower_http::{
-    cors::CorsLayer,
+    cors::{Any, CorsLayer},
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -53,7 +52,8 @@ async fn main() {
             // it is required to add ".allow_headers([http::header::CONTENT_TYPE])"
             // or see this issue https://github.com/tokio-rs/axum/issues/849
             CorsLayer::new()
-                .allow_origin("http://127.0.0.1:5000".parse::<HeaderValue>().unwrap())
+                .allow_origin(Any)
+                // .allow_origin("http://127.0.0.1:5000".parse::<HeaderValue>().unwrap())
                 .allow_methods([Method::GET])
                 .allow_credentials(true)
                 .allow_headers([http::header::CONTENT_TYPE]),

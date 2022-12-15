@@ -144,7 +144,7 @@ impl<SendT: Serialize, ReceiveT: Debug + for<'de> Deserialize<'de>> Submitter<Se
                 opts.body(Some(&JsValue::from(
                     serde_json::to_string(&self.data).unwrap(),
                 )));
-                opts.credentials(web_sys::RequestCredentials::Include);
+                // opts.credentials(web_sys::RequestCredentials::Include);
                 opts.mode(RequestMode::Cors);
                 let url = format!("{SERVER_URL}/{}", self.path);
                 let request = Request::new_with_str_and_init(&url, &opts).unwrap();
