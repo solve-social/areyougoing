@@ -41,7 +41,7 @@ async fn main() {
 
     let app = Router::new()
         // .route("/", get(get_page))
-        .route("/:poll_id", get(get_poll))
+        .route("/", get(get_poll))
         .route("/submit", post(submit))
         .route("/new_poll", post(new_poll))
         .route("/progress", post(get_progress))
@@ -66,8 +66,8 @@ async fn main() {
         .layer(Extension(config))
         .layer(Extension(Arc::new(Mutex::new(db))));
 
-    // let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
-    let addr = SocketAddr::from((local_ip().expect("Failed to get local ip address"), 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
+                                                         // let addr = SocketAddr::from((local_ip().expect("Failed to get local ip address"), 3000));
     println!("Listening on http://{addr}");
     axum::Server::bind(&addr)
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())

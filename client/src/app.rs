@@ -119,10 +119,13 @@ impl App {
             let url_string = window.location().href().unwrap();
             if let Ok(url) = Url::parse(&url_string) {
                 app.original_url = Some(url.clone());
-                if let Some(segments) = &mut url.path_segments() {
-                    if let Some(first) = &segments.next() {
-                        if let Ok(key) = first.parse::<u64>() {
+                console_log!("URL: {:?}", app.original_url);
+                for (query_key, query_value) in url.query_pairs() {
+                    console_log!("query: {:?}", (&query_key, &query_value));
+                    if query_key == "poll_key" {
+                        if let Ok(key) = query_value.parse::<u64>() {
                             url_key = Some(key);
+                            console_log!("url_key: {:?}", url_key);
                         }
                     }
                 }
@@ -352,7 +355,7 @@ impl eframe::App for App {
                     use PollState::*;
                     match &state {
                         NewPoll { .. } => {
-                            self.original_url.with_path("").push_to_window();
+                            self.original_url.with_query(Option::None).push_to_window();
                         }
                         Found { .. } => {
                             if let ParticipationState::SignedIn {

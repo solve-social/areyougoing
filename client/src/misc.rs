@@ -48,6 +48,12 @@ pub trait UrlExt {
         new_link
     }
 
+    fn with_query(&self, path: Option<&str>) -> Url {
+        let mut new_link = self.get().clone();
+        new_link.set_query(path);
+        new_link
+    }
+
     fn push_to_window(&self) {
         web_sys::window()
             .expect("no global `window` exists")
