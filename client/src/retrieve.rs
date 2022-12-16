@@ -60,6 +60,7 @@ impl RetrievingState {
                                     poll_progress_fetch: None,
                                     last_fetch: None,
                                     stale: true,
+                                    results_width: None,
                                 });
                             }
                             PollQueryResult::NotFound => {

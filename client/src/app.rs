@@ -62,6 +62,7 @@ pub enum PollState {
         #[derivative(PartialEq = "ignore")]
         poll_progress_fetch: Option<Submitter<u64, ProgressReportResult>>,
         stale: bool,
+        results_width: Option<f32>,
     },
     NotFound {
         key: u64,
@@ -260,6 +261,7 @@ impl eframe::App for App {
                     poll_progress_fetch,
                     last_fetch,
                     ref mut stale,
+                    ref mut results_width,
                 } => {
                     ui.heading(format!("{} (#{key})", poll.title));
 
