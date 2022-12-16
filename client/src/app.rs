@@ -372,14 +372,13 @@ impl eframe::App for App {
                             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                                 let where_to_put_background = ui.painter().add(Shape::Noop);
                                 let response = ui.label(metric); // Change this to collapsing
-                                let visuals = ui.style().visuals.widgets.hovered;
                                 let rect = response.rect.expand(1.);
                                 ui.painter().set(
                                     where_to_put_background,
                                     RectShape {
-                                        rounding: visuals.rounding,
-                                        fill: visuals.bg_fill,
-                                        stroke: visuals.bg_stroke,
+                                        rounding: ui.style().visuals.widgets.hovered.rounding,
+                                        fill: ui.style().visuals.widgets.active.bg_fill,
+                                        stroke: ui.style().visuals.widgets.hovered.bg_stroke,
                                         rect,
                                     },
                                 );
