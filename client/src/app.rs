@@ -11,7 +11,7 @@ use areyougoing_shared::{
 use derivative::Derivative;
 use eframe::epaint::RectShape;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
-use egui::{Color32, Direction, Grid, Pos2, Rect, Shape, Vec2};
+use egui::{Color32, Direction, Grid, Pos2, Rect, Shape, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -489,7 +489,22 @@ impl eframe::App for App {
 
                     /////////////////////////////////////////////////////////////
 
-                    // if let Some(left_rect) = results_ui_state.metric_rects.first()
+                    for (left_rect, (right_rect, (desc, state_text, color, metric, result))) in
+                        results_ui_state.metric_rects.iter().zip(
+                            results_ui_state
+                                .result_rects
+                                .iter()
+                                .zip(processed_results.iter()),
+                        )
+                    {
+                        const MARGIN: f32 = 3.0;
+                        let mut left = left_rect.right_center();
+                        let mut right = right_rect.left_center();
+                        left.x += MARGIN;
+                        right.x -= MARGIN;
+                        let vector = right - left;
+                        ui.painter().arrow(left, vector, Stroke::new(1.5, *color));
+                    }
 
                     ////////////////////////////////////////////////////////////
 
