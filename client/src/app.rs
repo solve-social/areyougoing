@@ -9,8 +9,9 @@ use areyougoing_shared::{
     ConditionDescription, ConditionState, Form, Poll, PollResult, ProgressReportResult, Question,
 };
 use derivative::Derivative;
-use egui::Color32;
+use eframe::epaint::RectShape;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
+use egui::{Color32, Direction, Grid, Pos2, Rect, Shape, Vec2};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -62,7 +63,7 @@ pub enum PollState {
         #[derivative(PartialEq = "ignore")]
         poll_progress_fetch: Option<Submitter<u64, ProgressReportResult>>,
         stale: bool,
-        results_width: Option<f32>,
+        results_ui_state: ResultsUiState,
     },
     NotFound {
         key: u64,
@@ -92,6 +93,10 @@ impl Default for App {
             need_reload: Default::default(),
         }
     }
+}
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
+pub struct ResultsUiState {
+    metric_rects: Vec<Rect>,
 }
 
 impl App {
@@ -261,57 +266,127 @@ impl eframe::App for App {
                     poll_progress_fetch,
                     last_fetch,
                     ref mut stale,
-                    ref mut results_width,
+                    ref mut results_ui_state,
                 } => {
                     ui.heading(format!("{} (#{key})", poll.title));
 
                     ui.label(&poll.description);
 
-                    for PollResult {
-                        description,
-                        result,
-                        progress,
-                    } in poll.results.iter()
-                    {
-                        // let defaults = ("", ui.ctx().style().visuals.text_color(), "");
-                        let (description_text, state_result, color) = match description {
-                            ConditionDescription::AtLeast {
-                                minimum,
-                                question_index,
-                                choice_index,
-                            } => {
-                                let Question { prompt, form } = &poll.questions[*question_index];
-                                let choice = match form {
-                                    Form::ChooseOneorNone { options } => {
-                                        &options[*choice_index as usize]
+                    let processed_results = poll
+                        .results
+                        .iter()
+                        .map(
+                            |PollResult {
+                                 description,
+                                 result,
+                                 progress,
+                             }| {
+                                match description {
+                                    ConditionDescription::AtLeast {
+                                        minimum,
+                                        question_index,
+                                        choice_index,
+                                    } => {
+                                        let Question { prompt, form } =
+                                            &poll.questions[*question_index];
+                                        let choice = match form {
+                                            Form::ChooseOneorNone { options } => {
+                                                &options[*choice_index as usize]
+                                            }
+                                        };
+                                        let (state_text, color) = match progress {
+                                            ConditionState::MetOrNotMet(met) => (
+                                                (if *met { "☑" } else { "☐" }).to_string(),
+                                                if *met { Color32::GREEN } else { Color32::RED },
+                                            ),
+                                            ConditionState::Progress(progress) => (
+                                                format!("{progress}/{minimum}"),
+                                                if progress >= minimum {
+                                                    Color32::GREEN
+                                                } else {
+                                                    Color32::RED
+                                                },
+                                            ),
+                                        };
+                                        let desc =
+                                            format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
+                                        (
+                                            desc,
+                                            state_text,
+                                            color,
+                                            format!("\"{choice}\" to \"{prompt}\""),
+                                        )
                                     }
-                                };
-                                let (state_text, color) = match progress {
-                                    ConditionState::MetOrNotMet(met) => (
-                                        (if *met { "☑" } else { "☐" }).to_string(),
-                                        if *met { Color32::GREEN } else { Color32::RED },
-                                    ),
-                                    ConditionState::Progress(progress) => (
-                                        format!("{progress}/{minimum}"),
-                                        if progress >= minimum {
-                                            Color32::GREEN
-                                        } else {
-                                            Color32::RED
-                                        },
-                                    ),
-                                };
-                                let desc = format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
-                                (desc, state_text, color)
+                                }
+                            },
+                        )
+                        .collect::<Vec<_>>();
+
+                    let ui_width = ui.available_width();
+                    const MIDDLE_CHANNEL_WIDTH: f32 = 35.0;
+                    let available_left = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
+                    const SIDE_MARGIN: f32 = 1.0;
+                    let left_rect = Rect {
+                        min: Pos2 {
+                            x: SIDE_MARGIN,
+                            y: ui.cursor().top(),
+                        },
+                        max: Pos2 {
+                            x: available_left,
+                            y: f32::MAX,
+                        },
+                    };
+                    let heading_rect =
+                        if let Some(top_metric_rect) = results_ui_state.metric_rects.first() {
+                            Rect {
+                                min: Pos2 {
+                                    x: top_metric_rect.left(),
+                                    y: left_rect.top(),
+                                },
+                                max: Pos2 {
+                                    x: top_metric_rect.right(),
+                                    y: f32::INFINITY,
+                                },
                             }
+                        } else {
+                            left_rect
                         };
-                        let mut output = format!("{state_result}: {description_text}");
-                        if !result.is_empty() {
-                            output = format!("{output} ➡ \"{result}\"");
-                        }
-                        ui.add_enabled_ui(!*stale, |ui| {
-                            ui.colored_label(color, output);
+                    ui.allocate_ui_at_rect(heading_rect, |ui| {
+                        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                            ui.label(RichText::new("Metrics").underline().strong());
                         });
-                    }
+                    });
+                    let left_rect = Rect {
+                        min: Pos2 {
+                            x: SIDE_MARGIN,
+                            y: ui.cursor().top(),
+                        },
+                        max: Pos2 {
+                            x: available_left,
+                            y: f32::MAX,
+                        },
+                    };
+                    results_ui_state.metric_rects.clear();
+                    ui.allocate_ui_at_rect(left_rect, |ui| {
+                        for (desc, state_text, color, metric) in processed_results {
+                            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                let where_to_put_background = ui.painter().add(Shape::Noop);
+                                let response = ui.label(metric); // Change this to collapsing
+                                let visuals = ui.style().visuals.widgets.hovered;
+                                let rect = response.rect.expand(1.);
+                                ui.painter().set(
+                                    where_to_put_background,
+                                    RectShape {
+                                        rounding: visuals.rounding,
+                                        fill: visuals.bg_fill,
+                                        stroke: visuals.bg_stroke,
+                                        rect,
+                                    },
+                                );
+                                results_ui_state.metric_rects.push(rect);
+                            });
+                        }
+                    });
 
                     let mut fetch_complete = false;
                     if let Some(fetch) = poll_progress_fetch {
