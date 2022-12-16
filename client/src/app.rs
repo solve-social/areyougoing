@@ -97,6 +97,7 @@ impl Default for App {
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 pub struct ResultsUiState {
     metric_rects: Vec<Rect>,
+    result_rects: Vec<Rect>,
 }
 
 impl App {
@@ -297,14 +298,18 @@ impl eframe::App for App {
                                         let (state_text, color) = match progress {
                                             ConditionState::MetOrNotMet(met) => (
                                                 (if *met { "☑" } else { "☐" }).to_string(),
-                                                if *met { Color32::GREEN } else { Color32::RED },
+                                                if *met {
+                                                    Color32::DARK_GREEN
+                                                } else {
+                                                    Color32::DARK_RED
+                                                },
                                             ),
                                             ConditionState::Progress(progress) => (
                                                 format!("{progress}/{minimum}"),
                                                 if progress >= minimum {
-                                                    Color32::GREEN
+                                                    Color32::DARK_GREEN
                                                 } else {
-                                                    Color32::RED
+                                                    Color32::DARK_RED
                                                 },
                                             ),
                                         };
@@ -315,6 +320,7 @@ impl eframe::App for App {
                                             state_text,
                                             color,
                                             format!("\"{choice}\" to \"{prompt}\""),
+                                            result,
                                         )
                                     }
                                 }
@@ -324,15 +330,17 @@ impl eframe::App for App {
 
                     let ui_width = ui.available_width();
                     const MIDDLE_CHANNEL_WIDTH: f32 = 35.0;
-                    let available_left = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
                     const SIDE_MARGIN: f32 = 1.0;
+                    let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
+                    let heading_top = ui.cursor().top();
+
                     let left_rect = Rect {
                         min: Pos2 {
                             x: SIDE_MARGIN,
-                            y: ui.cursor().top(),
+                            y: heading_top,
                         },
                         max: Pos2 {
-                            x: available_left,
+                            x: available_width_each_side,
                             y: f32::MAX,
                         },
                     };
@@ -362,17 +370,17 @@ impl eframe::App for App {
                             y: ui.cursor().top(),
                         },
                         max: Pos2 {
-                            x: available_left,
+                            x: available_width_each_side,
                             y: f32::MAX,
                         },
                     };
                     results_ui_state.metric_rects.clear();
                     ui.allocate_ui_at_rect(left_rect, |ui| {
-                        for (desc, state_text, color, metric) in processed_results {
+                        for (desc, state_text, color, metric, result) in processed_results.iter() {
                             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                                 let where_to_put_background = ui.painter().add(Shape::Noop);
                                 let response = ui.label(metric); // Change this to collapsing
-                                let rect = response.rect.expand(1.);
+                                let rect = response.rect.expand2(Vec2::new(1.5, 1.));
                                 ui.painter().set(
                                     where_to_put_background,
                                     RectShape {
@@ -386,6 +394,76 @@ impl eframe::App for App {
                             });
                         }
                     });
+
+                    ///////////////////////////
+                    ///
+                    let right_rect = Rect {
+                        min: Pos2 {
+                            x: ui_width - available_width_each_side,
+                            y: heading_top,
+                        },
+                        max: Pos2 {
+                            x: ui_width - SIDE_MARGIN,
+                            y: f32::MAX,
+                        },
+                    };
+                    let heading_rect =
+                        if let Some(top_result_rect) = results_ui_state.result_rects.first() {
+                            Rect {
+                                min: Pos2 {
+                                    x: top_result_rect.left(),
+                                    y: right_rect.top(),
+                                },
+                                max: Pos2 {
+                                    x: top_result_rect.right(),
+                                    y: f32::INFINITY,
+                                },
+                            }
+                        } else {
+                            right_rect
+                        };
+                    ui.allocate_ui_at_rect(heading_rect, |ui| {
+                        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                            ui.label(RichText::new("Results").underline().strong());
+                        });
+                    });
+                    let right_rect = Rect {
+                        min: Pos2 {
+                            x: ui_width - available_width_each_side,
+                            y: ui.cursor().top(),
+                        },
+                        max: Pos2 {
+                            x: ui_width - SIDE_MARGIN,
+                            y: f32::MAX,
+                        },
+                    };
+
+                    results_ui_state.result_rects.clear();
+                    ui.allocate_ui_at_rect(right_rect, |ui| {
+                        for (desc, state_text, color, metric, result) in processed_results.iter() {
+                            ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                let where_to_put_background = ui.painter().add(Shape::Noop);
+                                let response = ui.label(RichText::new(*result).strong()); // Change this to collapsing
+                                let rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                                ui.painter().set(
+                                    where_to_put_background,
+                                    RectShape {
+                                        rounding: ui.style().visuals.widgets.hovered.rounding,
+                                        fill: *color,
+                                        stroke: ui.style().visuals.widgets.hovered.bg_stroke,
+                                        rect,
+                                    },
+                                );
+                                results_ui_state.result_rects.push(rect);
+                            });
+                        }
+                    });
+
+                    /////////////////////////////////////////////////////////////
+
+                    // if let Some(left_rect) = results_ui_state.metric_rects.first()
+
+                    ////////////////////////////////////////////////////////////
 
                     let mut fetch_complete = false;
                     if let Some(fetch) = poll_progress_fetch {
