@@ -55,7 +55,7 @@ async fn main() {
                 .allow_origin(Any)
                 // .allow_origin("http://127.0.0.1:5000".parse::<HeaderValue>().unwrap())
                 .allow_methods([Method::GET])
-                .allow_credentials(true)
+                // .allow_credentials(true)
                 .allow_headers([http::header::CONTENT_TYPE]),
         )
         .layer(
