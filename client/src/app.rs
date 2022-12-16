@@ -313,8 +313,7 @@ impl eframe::App for App {
                                                 },
                                             ),
                                         };
-                                        let desc =
-                                            format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
+                                        let desc = format!("≥{minimum}");
                                         (
                                             desc,
                                             progress,
@@ -470,6 +469,25 @@ impl eframe::App for App {
                     ui.allocate_ui_at_rect(right_rect, |ui| {
                         for (desc, state_text, color, metric, result) in processed_results.iter() {
                             ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                let mut style = (*ui.ctx().style()).clone();
+                                style.spacing.item_spacing.x = 3.0;
+                                ui.ctx().set_style(style);
+
+                                let where_to_put_background = ui.painter().add(Shape::Noop);
+                                let response = ui.label(RichText::new(desc).strong()); // Change this to collapsing
+                                let progress_rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                                ui.painter().set(
+                                    where_to_put_background,
+                                    RectShape {
+                                        rounding: ui.style().visuals.widgets.hovered.rounding,
+                                        fill: *color,
+                                        stroke: ui.style().visuals.widgets.hovered.bg_stroke,
+                                        rect: progress_rect,
+                                    },
+                                );
+
+                                ui.label(":");
+
                                 let where_to_put_background = ui.painter().add(Shape::Noop);
                                 let response = ui.label(RichText::new(*result).strong()); // Change this to collapsing
                                 let rect = response.rect.expand2(Vec2::new(1.5, 1.));
@@ -482,7 +500,8 @@ impl eframe::App for App {
                                         rect,
                                     },
                                 );
-                                results_ui_state.result_rects.push(rect);
+                                let total_rect = rect.union(progress_rect);
+                                results_ui_state.result_rects.push(total_rect);
                             });
                         }
                     });
