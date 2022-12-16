@@ -295,9 +295,9 @@ impl eframe::App for App {
                                                 &options[*choice_index as usize]
                                             }
                                         };
-                                        let (state_text, color) = match progress {
+                                        let (progress, color) = match progress {
                                             ConditionState::MetOrNotMet(met) => (
-                                                (if *met { "☑" } else { "☐" }).to_string(),
+                                                None,
                                                 if *met {
                                                     Color32::DARK_GREEN
                                                 } else {
@@ -305,7 +305,7 @@ impl eframe::App for App {
                                                 },
                                             ),
                                             ConditionState::Progress(progress) => (
-                                                format!("{progress}/{minimum}"),
+                                                Some(progress.to_string()),
                                                 if progress >= minimum {
                                                     Color32::DARK_GREEN
                                                 } else {
@@ -317,7 +317,7 @@ impl eframe::App for App {
                                             format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
                                         (
                                             desc,
-                                            state_text,
+                                            progress,
                                             color,
                                             format!("\"{choice}\" to \"{prompt}\""),
                                             result,
@@ -378,6 +378,30 @@ impl eframe::App for App {
                     ui.allocate_ui_at_rect(left_rect, |ui| {
                         for (desc, state_text, color, metric, result) in processed_results.iter() {
                             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                let mut style = (*ui.ctx().style()).clone();
+                                style.spacing.item_spacing.x = 3.0;
+                                ui.ctx().set_style(style);
+
+                                let progress_rect = if let Some(progress) = state_text {
+                                    let where_to_put_background = ui.painter().add(Shape::Noop);
+                                    let response = ui.label(progress); // Change this to collapsing
+                                    let progress_rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                                    ui.painter().set(
+                                        where_to_put_background,
+                                        RectShape {
+                                            rounding: ui.style().visuals.widgets.hovered.rounding,
+                                            fill: ui.style().visuals.widgets.active.bg_fill,
+                                            stroke: ui.style().visuals.widgets.hovered.bg_stroke,
+                                            rect: progress_rect,
+                                        },
+                                    );
+                                    Some(progress_rect)
+                                } else {
+                                    None
+                                };
+
+                                ui.label(":");
+
                                 let where_to_put_background = ui.painter().add(Shape::Noop);
                                 let response = ui.label(metric); // Change this to collapsing
                                 let rect = response.rect.expand2(Vec2::new(1.5, 1.));
@@ -390,13 +414,17 @@ impl eframe::App for App {
                                         rect,
                                     },
                                 );
-                                results_ui_state.metric_rects.push(rect);
+                                let mut total_rect = rect;
+                                if let Some(progress_rect) = progress_rect {
+                                    total_rect = total_rect.union(progress_rect);
+                                }
+                                results_ui_state.metric_rects.push(total_rect);
                             });
                         }
                     });
 
                     ///////////////////////////
-                    ///
+
                     let right_rect = Rect {
                         min: Pos2 {
                             x: ui_width - available_width_each_side,
