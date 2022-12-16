@@ -59,13 +59,15 @@ impl ParticipationState {
                     sign_in_data.user_entry = "".to_string();
                 }
                 ui.separator();
-                ScrollArea::vertical().show(ui, |ui| {
-                    for name in sign_in_data.old_names.iter().rev() {
-                        if ui.button(name).clicked() {
-                            sign_in_data.user_entry = name.to_string();
+                ScrollArea::vertical()
+                    .id_source("name_scroll")
+                    .show(ui, |ui| {
+                        for name in sign_in_data.old_names.iter().rev() {
+                            if ui.button(name).clicked() {
+                                sign_in_data.user_entry = name.to_string();
+                            }
                         }
-                    }
-                });
+                    });
             }
             ParticipationState::SignedIn {
                 user,
@@ -74,45 +76,48 @@ impl ParticipationState {
                 if question_responses.is_empty() {
                     *question_responses = poll.init_responses();
                 }
-                ScrollArea::vertical().show(ui, |ui| {
-                    for (question, mut question_response) in
-                        poll.questions.iter().zip(question_responses.iter_mut())
-                    {
-                        ui.group(|ui| {
-                            ui.label(&question.prompt);
-                            match (&question.form, &mut question_response) {
-                                (
-                                    Form::ChooseOneorNone { options },
-                                    FormResponse::ChooseOneOrNone(choice),
-                                ) => {
-                                    for (i, option) in options.iter().enumerate() {
-                                        let selected =
-                                            choice.is_some() && choice.unwrap() == i as u8;
-                                        let mut button = Button::new(option);
-                                        if selected {
-                                            button = button
-                                                .fill(ui.ctx().style().visuals.selection.bg_fill);
-                                        }
-                                        let response = ui.add(button);
-                                        if !selected && response.clicked() {
-                                            *choice = Some(i as u8);
+                ScrollArea::vertical()
+                    .id_source("participation_scroll")
+                    .show(ui, |ui| {
+                        for (question, mut question_response) in
+                            poll.questions.iter().zip(question_responses.iter_mut())
+                        {
+                            ui.group(|ui| {
+                                ui.label(&question.prompt);
+                                match (&question.form, &mut question_response) {
+                                    (
+                                        Form::ChooseOneorNone { options },
+                                        FormResponse::ChooseOneOrNone(choice),
+                                    ) => {
+                                        for (i, option) in options.iter().enumerate() {
+                                            let selected =
+                                                choice.is_some() && choice.unwrap() == i as u8;
+                                            let mut button = Button::new(option);
+                                            if selected {
+                                                button = button.fill(
+                                                    ui.ctx().style().visuals.selection.bg_fill,
+                                                );
+                                            }
+                                            let response = ui.add(button);
+                                            if !selected && response.clicked() {
+                                                *choice = Some(i as u8);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        });
-                    }
-                    if ui.button("SUBMIT").clicked() {
-                        next_participation_state = Some(ParticipationState::Submitting {
-                            response: PollResponse {
-                                poll_id: key,
-                                user: user.to_string(),
-                                responses: question_responses.clone(),
-                            },
-                            state: None,
-                        });
-                    }
-                });
+                            });
+                        }
+                        if ui.button("SUBMIT").clicked() {
+                            next_participation_state = Some(ParticipationState::Submitting {
+                                response: PollResponse {
+                                    poll_id: key,
+                                    user: user.to_string(),
+                                    responses: question_responses.clone(),
+                                },
+                                state: None,
+                            });
+                        }
+                    });
             }
             ParticipationState::Submitting {
                 response,

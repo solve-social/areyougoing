@@ -72,20 +72,22 @@ impl NewPoll {
                     *show_conditions = !*show_conditions;
                 }
                 ui.separator();
-                ScrollArea::vertical().show(ui, |ui| {
-                    if *show_conditions {
-                        Self::show_results_form(ui, poll, ui_data);
-                    } else {
-                        Self::show_main_form(ui, poll, ui_data);
-                        ui.separator();
-                        if ui.button("SUBMIT").clicked() {
-                            next_new_poll_state = Some(NewPoll::Submitting {
-                                poll: poll.clone(),
-                                state: None,
-                            });
+                ScrollArea::vertical()
+                    .id_source("create_poll_scroll")
+                    .show(ui, |ui| {
+                        if *show_conditions {
+                            Self::show_results_form(ui, poll, ui_data);
+                        } else {
+                            Self::show_main_form(ui, poll, ui_data);
+                            ui.separator();
+                            if ui.button("SUBMIT").clicked() {
+                                next_new_poll_state = Some(NewPoll::Submitting {
+                                    poll: poll.clone(),
+                                    state: None,
+                                });
+                            }
                         }
-                    }
-                });
+                    });
             }
             NewPoll::Submitting {
                 poll,
