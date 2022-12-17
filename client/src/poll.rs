@@ -63,7 +63,7 @@ pub struct ResultsUiState {
 }
 
 impl PollState {
-    fn process(
+    pub fn process(
         &mut self,
         ui: &mut Ui,
         next_poll_state: &mut Option<PollState>,
@@ -204,7 +204,7 @@ impl PollState {
                 };
                 results_ui_state.metric_rects.clear();
                 ui.allocate_ui_at_rect(left_rect, |ui| {
-                    for (desc, state_text, color, metric, result) in processed_results.iter() {
+                    for (_desc, state_text, _color, metric, _result) in processed_results.iter() {
                         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                             let mut style = (*ui.ctx().style()).clone();
                             style.spacing.item_spacing.x = 3.0;
@@ -296,7 +296,7 @@ impl PollState {
 
                 results_ui_state.result_rects.clear();
                 ui.allocate_ui_at_rect(right_rect, |ui| {
-                    for (desc, state_text, color, metric, result) in processed_results.iter() {
+                    for (desc, _state_text, color, _metric, result) in processed_results.iter() {
                         ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                             let mut style = (*ui.ctx().style()).clone();
                             style.spacing.item_spacing.x = 3.0;
@@ -337,7 +337,7 @@ impl PollState {
 
                 /////////////////////////////////////////////////////////////
 
-                for (left_rect, (right_rect, (desc, state_text, color, metric, result))) in
+                for (left_rect, (right_rect, (_desc, _state_text, color, _metric, _result))) in
                     results_ui_state.metric_rects.iter().zip(
                         results_ui_state
                             .result_rects

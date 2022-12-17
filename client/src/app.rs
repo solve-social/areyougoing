@@ -1,22 +1,15 @@
-use crate::misc::{
-    console_log, get_window, listen_in_window, log, AtomicBoolExt, Submitter, UrlExt,
-};
+use crate::misc::{console_log, get_window, listen_in_window, log, AtomicBoolExt};
 use crate::new_poll::NewPoll;
 use crate::participation::ParticipationState;
 use crate::poll::PollState;
 use crate::retrieve::RetrievingState;
-use crate::time::Instant;
-use areyougoing_shared::{
-    ConditionDescription, ConditionState, Form, Poll, PollResult, ProgressReportResult, Question,
-};
-use derivative::Derivative;
-use eframe::epaint::RectShape;
+
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
-use egui::{Color32, Direction, Grid, Pos2, Rect, Shape, Stroke, Vec2};
+
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Duration;
+
 use url::Url;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -199,6 +192,14 @@ impl eframe::App for App {
             });
         });
 
-        CentralPanel::default().show(ctx, |ui| {});
+        CentralPanel::default().show(ctx, |ui| {
+            self.poll_state.process(
+                ui,
+                &mut next_poll_state,
+                &self.original_url,
+                &mut self.participation_state,
+                &mut self.sign_in_data,
+            );
+        });
     }
 }
