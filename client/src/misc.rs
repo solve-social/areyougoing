@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use egui::{pos2, vec2, Align, Layout, Rect, Sense, Ui};
 use futures_lite::{future, Future};
 use gloo::events::EventListener;
 use gloo::{console::__macro::JsValue, net::http::RequestMode};
@@ -184,5 +185,78 @@ impl<SendT: Serialize, ReceiveT: Debug + for<'de> Deserialize<'de>> Submitter<Se
             self.state = next_state;
         }
         None
+    }
+}
+
+pub trait UiExt {
+    fn unequal_columns<R>(
+        &mut self,
+        column_widths: &[f32],
+        add_contents: impl FnOnce(&mut [Self]) -> R,
+    ) -> R;
+    #[allow(clippy::type_complexity)]
+    fn unequal_columns_dyn<'c, R>(
+        &mut self,
+        column_widths: &[f32],
+        add_contents: Box<dyn FnOnce(&mut [Self]) -> R + 'c>,
+    ) -> R
+    where
+        Self: std::marker::Sized;
+}
+
+impl UiExt for Ui {
+    fn unequal_columns<R>(
+        &mut self,
+        column_widths: &[f32],
+        add_contents: impl FnOnce(&mut [Self]) -> R,
+    ) -> R {
+        self.unequal_columns_dyn(column_widths, Box::new(add_contents))
+    }
+
+    fn unequal_columns_dyn<'c, R>(
+        &mut self,
+        column_widths: &[f32],
+        add_contents: Box<dyn FnOnce(&mut [Self]) -> R + 'c>,
+    ) -> R {
+        // TODO(emilk): ensure there is space
+        let spacing = self.spacing().item_spacing.x;
+        let total_spacing = spacing * (column_widths.len() as f32 - 1.0);
+        // let column_width = (self.available_width() - total_spacing) / (num_columns as f32);
+        let top_left = self.cursor().min;
+
+        let mut pos = top_left;
+        let mut columns: Vec<Self> = column_widths
+            .iter()
+            .enumerate()
+            .map(|(_col_idx, column_width)| {
+                // let pos = top_left + vec2((col_idx as f32) * (column_width + spacing), 0.0);
+                let child_rect = Rect::from_min_max(
+                    pos,
+                    pos2(pos.x + column_width, self.max_rect().right_bottom().y),
+                );
+                let mut column_ui =
+                    self.child_ui(child_rect, Layout::top_down_justified(Align::LEFT));
+                column_ui.set_width(*column_width);
+                pos += vec2((column_width + spacing), 0.0);
+                column_ui
+            })
+            .collect();
+
+        let result = add_contents(&mut columns[..]);
+
+        let mut max_column_widths = column_widths.to_vec();
+        let mut max_height = 0.0;
+        for (column, max_column_width) in columns.iter().zip(max_column_widths.iter_mut()) {
+            *max_column_width = max_column_width.max(column.min_rect().width());
+            max_height = column.min_size().y.max(max_height);
+        }
+
+        // Make sure we fit everything next frame:
+        let total_required_width = total_spacing + max_column_widths.iter().sum::<f32>();
+
+        let size = vec2(self.available_width().max(total_required_width), max_height);
+        self.allocate_rect(Rect::from_min_size(top_left, size), Sense::drag());
+        // self.advance_cursor_after_rect(Rect::from_min_size(top_left, size));
+        result
     }
 }

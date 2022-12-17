@@ -5,13 +5,16 @@ use areyougoing_shared::{
 };
 use derivative::Derivative;
 use eframe::epaint::RectShape;
-use egui::{Align, Color32, Layout, Pos2, Rect, RichText, Shape, Stroke, Ui, Vec2};
+use egui::{
+    vec2, Align, Color32, Frame, Grid, Label, Layout, Pos2, Rect, RichText, Shape, Stroke,
+    TextStyle, Ui, Vec2,
+};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
     app::SignInData,
-    misc::{Submitter, UrlExt},
+    misc::{console_log, Submitter, UiExt, UrlExt},
     new_poll::NewPoll,
     participation::ParticipationState,
     retrieve::RetrievingState,
@@ -60,6 +63,8 @@ impl Default for PollState {
 pub struct ResultsUiState {
     metric_rects: Vec<Rect>,
     result_rects: Vec<Rect>,
+    progress_rects: Vec<Rect>,
+    condition_rects: Vec<Rect>,
 }
 
 impl PollState {
@@ -160,187 +165,132 @@ impl PollState {
                 const MIDDLE_CHANNEL_WIDTH: f32 = 65.0;
                 const SIDE_MARGIN: f32 = 1.0;
                 let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
-                let heading_top = ui.cursor().top();
+                let left_right_col_width = available_width_each_side - ui.spacing().item_spacing.x;
 
-                let left_rect = Rect {
-                    min: Pos2 {
-                        x: SIDE_MARGIN,
-                        y: heading_top,
-                    },
-                    max: Pos2 {
-                        x: available_width_each_side,
-                        y: f32::MAX,
-                    },
-                };
-                let heading_rect =
-                    if let Some(top_metric_rect) = results_ui_state.metric_rects.first() {
-                        Rect {
-                            min: Pos2 {
-                                x: top_metric_rect.left(),
-                                y: left_rect.top(),
-                            },
-                            max: Pos2 {
-                                x: top_metric_rect.right(),
-                                y: f32::INFINITY,
-                            },
-                        }
-                    } else {
-                        left_rect
-                    };
-                ui.allocate_ui_at_rect(heading_rect, |ui| {
-                    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                        ui.label(RichText::new("Metrics").underline().strong());
-                    });
-                });
-                let left_rect = Rect {
-                    min: Pos2 {
-                        x: SIDE_MARGIN,
-                        y: ui.cursor().top(),
-                    },
-                    max: Pos2 {
-                        x: available_width_each_side,
-                        y: f32::MAX,
-                    },
-                };
-                results_ui_state.metric_rects.clear();
-                ui.allocate_ui_at_rect(left_rect, |ui| {
-                    for (_desc, state_text, _color, metric, _result) in processed_results.iter() {
-                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            let mut style = (*ui.ctx().style()).clone();
-                            style.spacing.item_spacing.x = 3.5;
-                            ui.ctx().set_style(style);
+                let results_frame = Frame::none()
+                    .inner_margin(Vec2::new(2.0, 1.))
+                    .stroke(ui.style().visuals.widgets.hovered.bg_stroke)
+                    .rounding(3.)
+                    .fill(ui.style().visuals.widgets.active.bg_fill);
 
-                            let progress_rect = if let Some(progress) = state_text {
-                                let where_to_put_background = ui.painter().add(Shape::Noop);
-                                let response = ui.label(progress); // Change this to collapsing
-                                let progress_rect = response.rect.expand2(Vec2::new(2.0, 1.));
-                                ui.painter().set(
-                                    where_to_put_background,
-                                    RectShape {
-                                        rounding: ui.style().visuals.widgets.hovered.rounding,
-                                        fill: ui.style().visuals.widgets.active.bg_fill,
-                                        stroke: ui.style().visuals.widgets.hovered.bg_stroke,
-                                        rect: progress_rect,
-                                    },
-                                );
-                                Some(progress_rect)
-                            } else {
-                                None
-                            };
+                ui.separator();
 
-                            ui.label(":");
-
-                            let where_to_put_background = ui.painter().add(Shape::Noop);
-                            let response = ui.label(metric); // Change this to collapsing
-                            let rect = response.rect.expand2(Vec2::new(1.5, 1.));
-                            ui.painter().set(
-                                where_to_put_background,
-                                RectShape {
-                                    rounding: ui.style().visuals.widgets.hovered.rounding,
-                                    fill: ui.style().visuals.widgets.active.bg_fill,
-                                    stroke: ui.style().visuals.widgets.hovered.bg_stroke,
-                                    rect,
-                                },
-                            );
-                            let mut total_rect = rect;
-                            if let Some(progress_rect) = progress_rect {
-                                total_rect = total_rect.union(progress_rect);
-                            }
-                            results_ui_state.metric_rects.push(total_rect);
+                ui.unequal_columns(
+                    &[
+                        left_right_col_width,
+                        MIDDLE_CHANNEL_WIDTH,
+                        left_right_col_width,
+                    ],
+                    |columns| {
+                        columns[0].with_layout(Layout::top_down(Align::Center), |ui| {
+                            ui.label(RichText::new("Metrics").underline().strong());
                         });
-                    }
-                });
-
-                ///////////////////////////
-
-                let right_rect = Rect {
-                    min: Pos2 {
-                        x: ui_width - available_width_each_side,
-                        y: heading_top,
-                    },
-                    max: Pos2 {
-                        x: ui_width - SIDE_MARGIN,
-                        y: f32::MAX,
-                    },
-                };
-                let heading_rect =
-                    if let Some(top_result_rect) = results_ui_state.result_rects.first() {
-                        Rect {
-                            min: Pos2 {
-                                x: top_result_rect.left(),
-                                y: right_rect.top(),
-                            },
-                            max: Pos2 {
-                                x: top_result_rect.right(),
-                                y: f32::INFINITY,
-                            },
+                        results_ui_state.progress_rects.clear();
+                        for (i, (_desc, state_text, _color, metric, _result)) in
+                            processed_results.iter().enumerate()
+                        {
+                            let mut size = columns[0].available_size();
+                            size.y = 0.;
+                            columns[0].allocate_ui_with_layout(
+                                size,
+                                Layout::right_to_left(Align::Center),
+                                |ui| {
+                                    let mut progress_rect = None;
+                                    if let Some(progress) = state_text {
+                                        if let Some(metric_rect) =
+                                            results_ui_state.metric_rects.get(i)
+                                        {
+                                            let rect = ui
+                                                .available_rect_before_wrap()
+                                                .translate(vec2(
+                                                    0.,
+                                                    metric_rect.height() / 2.
+                                                        - ui.text_style_height(&TextStyle::Body)
+                                                            / 2.,
+                                                ))
+                                                .expand(results_frame.stroke.width);
+                                            ui.allocate_ui_at_rect(rect, |ui| {
+                                                let response = results_frame.show(ui, |ui| {
+                                                    ui.label(progress);
+                                                });
+                                                progress_rect = Some(response.response.rect);
+                                            });
+                                        }
+                                    }
+                                    let metric_rect = results_frame
+                                        .show(ui, |ui| ui.add(Label::new(metric).wrap(true)))
+                                        .response
+                                        .rect;
+                                    results_ui_state.progress_rects.push(
+                                        if let Some(progress_rect) = progress_rect {
+                                            progress_rect
+                                        } else {
+                                            metric_rect
+                                        },
+                                    );
+                                    if let Some(old_rect) = results_ui_state.metric_rects.get_mut(i)
+                                    {
+                                        *old_rect = metric_rect
+                                    } else {
+                                        results_ui_state.metric_rects.push(metric_rect);
+                                    }
+                                },
+                            );
                         }
-                    } else {
-                        right_rect
-                    };
-                ui.allocate_ui_at_rect(heading_rect, |ui| {
-                    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                        ui.label(RichText::new("Results").underline().strong());
-                    });
-                });
-                let right_rect = Rect {
-                    min: Pos2 {
-                        x: ui_width - available_width_each_side,
-                        y: ui.cursor().top(),
-                    },
-                    max: Pos2 {
-                        x: ui_width - SIDE_MARGIN,
-                        y: f32::MAX,
-                    },
-                };
 
-                results_ui_state.result_rects.clear();
-                ui.allocate_ui_at_rect(right_rect, |ui| {
-                    for (desc, _state_text, color, _metric, result) in processed_results.iter() {
-                        ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
-                            let mut style = (*ui.ctx().style()).clone();
-                            style.spacing.item_spacing.x = 3.5;
-                            ui.ctx().set_style(style);
-
-                            let where_to_put_background = ui.painter().add(Shape::Noop);
-                            let response = ui.label(RichText::new(desc).strong()); // Change this to collapsing
-                            let progress_rect = response.rect.expand2(Vec2::new(3.0, 1.));
-                            ui.painter().set(
-                                where_to_put_background,
-                                RectShape {
-                                    rounding: ui.style().visuals.widgets.hovered.rounding,
-                                    fill: *color,
-                                    stroke: ui.style().visuals.widgets.hovered.bg_stroke,
-                                    rect: progress_rect,
-                                },
-                            );
-
-                            ui.label(":");
-
-                            let where_to_put_background = ui.painter().add(Shape::Noop);
-                            let response = ui.label(RichText::new(*result).strong()); // Change this to collapsing
-                            let rect = response.rect.expand2(Vec2::new(3.0, 1.));
-                            ui.painter().set(
-                                where_to_put_background,
-                                RectShape {
-                                    rounding: ui.style().visuals.widgets.hovered.rounding,
-                                    fill: *color,
-                                    stroke: ui.style().visuals.widgets.hovered.bg_stroke,
-                                    rect,
-                                },
-                            );
-                            let total_rect = rect.union(progress_rect);
-                            results_ui_state.result_rects.push(total_rect);
+                        columns[2].with_layout(Layout::top_down(Align::Center), |ui| {
+                            ui.label(RichText::new("Results").underline().strong());
                         });
-                    }
-                });
+                        results_ui_state.condition_rects.clear();
+                        for (i, (desc, state_text, _color, result, _result)) in
+                            processed_results.iter().enumerate()
+                        {
+                            let results_frame = results_frame.fill(*_color);
+                            let mut size = columns[2].available_size();
+                            size.y = 0.;
+                            columns[2].allocate_ui_with_layout(
+                                size,
+                                Layout::left_to_right(Align::Center),
+                                |ui| {
+                                    if let Some(result) = results_ui_state.result_rects.get(i) {
+                                        let rect = ui
+                                            .available_rect_before_wrap()
+                                            .translate(vec2(
+                                                0.,
+                                                result.height() / 2.
+                                                    - ui.text_style_height(&TextStyle::Body) / 2.,
+                                            ))
+                                            .expand(results_frame.stroke.width);
+                                        ui.allocate_ui_at_rect(rect, |ui| {
+                                            let response = results_frame.show(ui, |ui| {
+                                                ui.label(desc);
+                                            });
+                                            results_ui_state
+                                                .condition_rects
+                                                .push(response.response.rect);
+                                        });
+                                    }
 
-                /////////////////////////////////////////////////////////////
+                                    let rect = results_frame
+                                        .show(ui, |ui| ui.add(Label::new(*_result).wrap(true)))
+                                        .response
+                                        .rect;
+                                    if let Some(old_rect) = results_ui_state.result_rects.get_mut(i)
+                                    {
+                                        *old_rect = rect
+                                    } else {
+                                        results_ui_state.result_rects.push(rect);
+                                    }
+                                },
+                            );
+                        }
+                    },
+                );
 
                 for (left_rect, (right_rect, (_desc, _state_text, color, _metric, _result))) in
-                    results_ui_state.metric_rects.iter().zip(
+                    results_ui_state.progress_rects.iter().zip(
                         results_ui_state
-                            .result_rects
+                            .condition_rects
                             .iter()
                             .zip(processed_results.iter()),
                     )
@@ -353,6 +303,8 @@ impl PollState {
                     let vector = right - left;
                     ui.painter().arrow(left, vector, Stroke::new(3.0, *color));
                 }
+
+                ui.separator();
 
                 ////////////////////////////////////////////////////////////
 
