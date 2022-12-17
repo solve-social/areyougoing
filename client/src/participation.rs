@@ -35,19 +35,12 @@ impl ParticipationState {
         poll: &Poll,
         stale: &mut bool,
     ) {
-        ui.separator();
         let mut next_participation_state = None;
         match self {
             ParticipationState::SignIn => {
-                let mut sign_in_hint = "Type a name".to_string();
-                if !sign_in_data.old_names.is_empty() {
-                    sign_in_hint += " or choose one from below";
-                }
-                // ui.label(format!(
-                //     "Type your name or choose a previous name \
-                //                     from below and select \"{SIGN_IN_TEXT}\""
-                // ));
-                ui.add(TextEdit::singleline(&mut sign_in_data.user_entry).hint_text(sign_in_hint));
+                const SIGN_IN_HINT: &str = "Type a name";
+                ui.label("Participate in this poll?");
+                ui.add(TextEdit::singleline(&mut sign_in_data.user_entry).hint_text(SIGN_IN_HINT));
                 if ui.button(SIGN_IN_TEXT).clicked() {
                     next_participation_state = Some(ParticipationState::SignedIn {
                         user: sign_in_data.user_entry.clone(),
@@ -58,16 +51,19 @@ impl ParticipationState {
                     }
                     sign_in_data.user_entry = "".to_string();
                 }
-                ui.separator();
-                ScrollArea::vertical()
-                    .id_source("name_scroll")
-                    .show(ui, |ui| {
-                        for name in sign_in_data.old_names.iter().rev() {
-                            if ui.button(name).clicked() {
-                                sign_in_data.user_entry = name.to_string();
+                if !sign_in_data.old_names.is_empty() {
+                    ui.separator();
+                    ui.label("Autofill a previous name?");
+                    ScrollArea::vertical()
+                        .id_source("name_scroll")
+                        .show(ui, |ui| {
+                            for name in sign_in_data.old_names.iter().rev() {
+                                if ui.button(name).clicked() {
+                                    sign_in_data.user_entry = name.to_string();
+                                }
                             }
-                        }
-                    });
+                        });
+                }
             }
             ParticipationState::SignedIn {
                 user,

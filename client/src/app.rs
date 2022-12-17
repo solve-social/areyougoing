@@ -58,7 +58,7 @@ impl App {
 
         let mut style = (*cc.egui_ctx.style()).clone();
         for (_text_style, font_id) in style.text_styles.iter_mut() {
-            font_id.size *= 1.8; // whatever size you want here
+            font_id.size *= 1.7; // whatever size you want here
         }
         cc.egui_ctx.set_style(style);
         // Load previous app state (if any).
