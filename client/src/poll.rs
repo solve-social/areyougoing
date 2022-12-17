@@ -4,17 +4,16 @@ use areyougoing_shared::{
     ConditionDescription, ConditionState, Form, Poll, PollResult, ProgressReportResult, Question,
 };
 use derivative::Derivative;
-use eframe::epaint::RectShape;
+
 use egui::{
-    vec2, Align, Color32, Frame, Grid, Label, Layout, Pos2, Rect, RichText, Shape, Stroke,
-    TextStyle, Ui, Vec2,
+    vec2, Align, Color32, Frame, Label, Layout, Rect, RichText, Stroke, TextStyle, Ui, Vec2,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
     app::SignInData,
-    misc::{console_log, Submitter, UiExt, UrlExt},
+    misc::{Submitter, UiExt, UrlExt},
     new_poll::NewPoll,
     participation::ParticipationState,
     retrieve::RetrievingState,
@@ -242,7 +241,7 @@ impl PollState {
                             ui.label(RichText::new("Results").underline().strong());
                         });
                         results_ui_state.condition_rects.clear();
-                        for (i, (desc, state_text, _color, result, _result)) in
+                        for (i, (desc, _state_text, _color, _metric, _result)) in
                             processed_results.iter().enumerate()
                         {
                             let results_frame = results_frame.fill(*_color);

@@ -237,7 +237,7 @@ impl UiExt for Ui {
                 let mut column_ui =
                     self.child_ui(child_rect, Layout::top_down_justified(Align::LEFT));
                 column_ui.set_width(*column_width);
-                pos += vec2((column_width + spacing), 0.0);
+                pos += vec2(column_width + spacing, 0.0);
                 column_ui
             })
             .collect();
