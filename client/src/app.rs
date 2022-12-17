@@ -56,6 +56,11 @@ impl App {
         // This is also where you can customized the look at feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
+        let mut style = (*cc.egui_ctx.style()).clone();
+        for (_text_style, font_id) in style.text_styles.iter_mut() {
+            font_id.size *= 1.8; // whatever size you want here
+        }
+        cc.egui_ctx.set_style(style);
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         let mut app: App = if let Some(storage) = cc.storage {

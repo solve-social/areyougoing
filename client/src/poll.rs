@@ -157,7 +157,7 @@ impl PollState {
                     .collect::<Vec<_>>();
 
                 let ui_width = ui.available_width();
-                const MIDDLE_CHANNEL_WIDTH: f32 = 35.0;
+                const MIDDLE_CHANNEL_WIDTH: f32 = 65.0;
                 const SIDE_MARGIN: f32 = 1.0;
                 let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
                 let heading_top = ui.cursor().top();
@@ -207,13 +207,13 @@ impl PollState {
                     for (_desc, state_text, _color, metric, _result) in processed_results.iter() {
                         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                             let mut style = (*ui.ctx().style()).clone();
-                            style.spacing.item_spacing.x = 3.0;
+                            style.spacing.item_spacing.x = 3.5;
                             ui.ctx().set_style(style);
 
                             let progress_rect = if let Some(progress) = state_text {
                                 let where_to_put_background = ui.painter().add(Shape::Noop);
                                 let response = ui.label(progress); // Change this to collapsing
-                                let progress_rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                                let progress_rect = response.rect.expand2(Vec2::new(2.0, 1.));
                                 ui.painter().set(
                                     where_to_put_background,
                                     RectShape {
@@ -299,12 +299,12 @@ impl PollState {
                     for (desc, _state_text, color, _metric, result) in processed_results.iter() {
                         ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                             let mut style = (*ui.ctx().style()).clone();
-                            style.spacing.item_spacing.x = 3.0;
+                            style.spacing.item_spacing.x = 3.5;
                             ui.ctx().set_style(style);
 
                             let where_to_put_background = ui.painter().add(Shape::Noop);
                             let response = ui.label(RichText::new(desc).strong()); // Change this to collapsing
-                            let progress_rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                            let progress_rect = response.rect.expand2(Vec2::new(3.0, 1.));
                             ui.painter().set(
                                 where_to_put_background,
                                 RectShape {
@@ -319,7 +319,7 @@ impl PollState {
 
                             let where_to_put_background = ui.painter().add(Shape::Noop);
                             let response = ui.label(RichText::new(*result).strong()); // Change this to collapsing
-                            let rect = response.rect.expand2(Vec2::new(1.5, 1.));
+                            let rect = response.rect.expand2(Vec2::new(3.0, 1.));
                             ui.painter().set(
                                 where_to_put_background,
                                 RectShape {
@@ -351,7 +351,7 @@ impl PollState {
                     left.x += MARGIN;
                     right.x -= MARGIN;
                     let vector = right - left;
-                    ui.painter().arrow(left, vector, Stroke::new(1.5, *color));
+                    ui.painter().arrow(left, vector, Stroke::new(3.0, *color));
                 }
 
                 ////////////////////////////////////////////////////////////
