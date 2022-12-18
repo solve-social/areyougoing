@@ -260,15 +260,18 @@ impl NewPoll {
                         }
                         if let Some(index) = delete_i {
                             options.remove(index);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                         if options.is_empty() {
                             new_option_index = Some(0);
                         }
                         if let Some(index) = new_option_index {
-                            options.insert(index, "".to_string())
+                            options.insert(index, "".to_string());
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                         if let Some((a, b)) = swap_indices {
                             options.swap(a, b);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                     }
                 }
@@ -282,9 +285,11 @@ impl NewPoll {
         }
         if let Some(index) = delete_i {
             poll.questions.remove(index);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         if let Some((a, b)) = swap_indices {
             poll.questions.swap(a, b);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         if poll.questions.is_empty() {
             new_question_index = Some(0);
@@ -299,6 +304,7 @@ impl NewPoll {
                     },
                 },
             );
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
     }
 
