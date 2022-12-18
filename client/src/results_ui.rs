@@ -219,14 +219,19 @@ impl ResultsUi {
                                     .expand(results_frame.stroke.width);
                                 ui.allocate_ui_at_rect(rect, |ui| {
                                     let response = results_frame.show(ui, |ui| {
-                                        ui.label(desc);
+                                        ui.colored_label(
+                                            ui.style().visuals.strong_text_color(),
+                                            desc,
+                                        );
                                     });
                                     self.ui_state.condition_rects.push(response.response.rect);
                                 });
                             }
 
                             let rect = results_frame
-                                .show(ui, |ui| ui.add(Label::new(*_result).wrap(true)))
+                                .show(ui, |ui| {
+                                    ui.add(Label::new(RichText::new(*_result).strong()).wrap(true))
+                                })
                                 .response
                                 .rect;
                             if let Some(old_rect) = self.ui_state.result_rects.get_mut(i) {
