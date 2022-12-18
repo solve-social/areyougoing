@@ -7,6 +7,7 @@ pub mod misc;
 pub mod new_poll;
 pub mod participation;
 pub mod poll;
+pub mod results_ui;
 pub mod retrieve;
 
 // pub const SERVER_URL: &str = "http://127.0.0.1:3000";

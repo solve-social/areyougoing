@@ -57,10 +57,7 @@ impl RetrievingState {
                                 *next_poll_state = Some(PollState::Found {
                                     poll,
                                     key: poll_key,
-                                    poll_progress_fetch: None,
-                                    last_fetch: None,
-                                    stale: true,
-                                    results_ui_state: Default::default(),
+                                    results_ui: Default::default(),
                                     participation_state: ParticipationState::SignIn,
                                 });
                             }

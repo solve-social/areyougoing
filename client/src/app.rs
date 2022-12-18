@@ -4,6 +4,7 @@ use crate::participation::ParticipationState;
 use crate::poll::PollState;
 use crate::retrieve::RetrievingState;
 
+use egui::Visuals;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
 
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,8 @@ impl App {
             font_id.size *= 1.7; // whatever size you want here
         }
         cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_visuals(Visuals::dark());
+
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         let mut app: App = if let Some(storage) = cc.storage {
