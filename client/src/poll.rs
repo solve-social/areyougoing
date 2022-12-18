@@ -6,7 +6,7 @@ use areyougoing_shared::{
 use derivative::Derivative;
 
 use egui::{
-    vec2, Align, Color32, Frame, Label, Layout, Rect, RichText, Stroke, TextStyle, Ui, Vec2,
+    pos2, vec2, Align, Color32, Frame, Label, Layout, Rect, RichText, Stroke, TextStyle, Ui, Vec2,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -161,7 +161,7 @@ impl PollState {
                     .collect::<Vec<_>>();
 
                 let ui_width = ui.available_width();
-                const MIDDLE_CHANNEL_WIDTH: f32 = 65.0;
+                const MIDDLE_CHANNEL_WIDTH: f32 = 45.0;
                 const SIDE_MARGIN: f32 = 1.0;
                 let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
                 let left_right_col_width = available_width_each_side - ui.spacing().item_spacing.x;
@@ -181,9 +181,24 @@ impl PollState {
                         left_right_col_width,
                     ],
                     |columns| {
-                        columns[0].with_layout(Layout::top_down(Align::Center), |ui| {
-                            ui.label(RichText::new("Metrics").underline().strong());
+                        let heading_rect = if let Some(rect) = results_ui_state.metric_rects.first()
+                        {
+                            Rect {
+                                min: pos2(
+                                    rect.left(),
+                                    columns[0].available_rect_before_wrap().top(),
+                                ),
+                                max: pos2(rect.right(), f32::INFINITY),
+                            }
+                        } else {
+                            columns[0].available_rect_before_wrap()
+                        };
+                        columns[0].allocate_ui_at_rect(heading_rect, |ui| {
+                            ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                                ui.label(RichText::new("Metrics").underline().strong());
+                            });
                         });
+
                         results_ui_state.progress_rects.clear();
                         for (i, (_desc, state_text, _color, metric, _result)) in
                             processed_results.iter().enumerate()
@@ -237,9 +252,24 @@ impl PollState {
                             );
                         }
 
-                        columns[2].with_layout(Layout::top_down(Align::Center), |ui| {
-                            ui.label(RichText::new("Results").underline().strong());
+                        let heading_rect = if let Some(rect) = results_ui_state.result_rects.first()
+                        {
+                            Rect {
+                                min: pos2(
+                                    rect.left(),
+                                    columns[2].available_rect_before_wrap().top(),
+                                ),
+                                max: pos2(rect.right(), f32::INFINITY),
+                            }
+                        } else {
+                            columns[2].available_rect_before_wrap()
+                        };
+                        columns[2].allocate_ui_at_rect(heading_rect, |ui| {
+                            ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                                ui.label(RichText::new("Results").underline().strong());
+                            });
                         });
+
                         results_ui_state.condition_rects.clear();
                         for (i, (desc, _state_text, _color, _metric, _result)) in
                             processed_results.iter().enumerate()
