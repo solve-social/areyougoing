@@ -10,7 +10,7 @@ const SIGN_IN_TEXT: &str = "SIGN IN";
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum ParticipationState {
     SignedIn {
         user: String,

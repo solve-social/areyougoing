@@ -38,6 +38,7 @@ pub enum PollState {
     Found {
         key: u64,
         poll: Poll,
+        participation_state: ParticipationState,
         #[serde(skip)]
         #[derivative(PartialEq = "ignore")]
         last_fetch: Option<Instant>,
@@ -72,7 +73,6 @@ impl PollState {
         ui: &mut Ui,
         next_poll_state: &mut Option<PollState>,
         original_url: &Option<Url>,
-        participation_state: &mut ParticipationState,
         sign_in_data: &mut SignInData,
     ) {
         ui.vertical_centered(|ui| match self {
@@ -97,6 +97,7 @@ impl PollState {
             PollState::Found {
                 key,
                 poll,
+                ref mut participation_state,
                 poll_progress_fetch,
                 last_fetch,
                 ref mut stale,
@@ -375,22 +376,23 @@ impl PollState {
                 ui.label(format!("No poll with ID #{key} was found 😥"));
             }
         });
-        if let Some(state) = next_poll_state.take() {
+        if let Some(mut state) = next_poll_state.take() {
             {
                 use PollState::*;
-                match &state {
+                match &mut state {
                     NewPoll { .. } => {
                         original_url.with_query(Option::None).push_to_window();
                     }
-                    Found { .. } => {
-                        if let ParticipationState::SignedIn {
-                            question_responses: ref mut responses,
-                            ..
-                        } = participation_state
-                        {
-                            // Temporary for debugging, with changing polls as we go
-                            *responses = Default::default();
-                        }
+                    Found {
+                        participation_state:
+                            ParticipationState::SignedIn {
+                                ref mut question_responses,
+                                ..
+                            },
+                        ..
+                    } => {
+                        // Temporary for debugging, with changing polls as we go
+                        *question_responses = Default::default();
                     }
                     _ => {}
                 }

@@ -16,7 +16,6 @@ use url::Url;
 #[derive(Deserialize, Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
-    participation_state: ParticipationState,
     poll_state: PollState,
     sign_in_data: SignInData,
     top_panel_inner_height: Option<f32>,
@@ -35,7 +34,6 @@ pub struct SignInData {
 impl Default for App {
     fn default() -> Self {
         Self {
-            participation_state: ParticipationState::SignIn,
             poll_state: PollState::None,
             sign_in_data: SignInData {
                 user_entry: "".to_string(),
@@ -121,16 +119,21 @@ impl App {
             _ => {}
         }
         {
-            let mut new_state = None;
-
-            if let ParticipationState::Submitting { ref response, .. } = app.participation_state {
-                new_state = Some(ParticipationState::SignedIn {
-                    user: response.user.clone(),
-                    question_responses: response.responses.clone(),
-                });
-            }
-            if let Some(state) = new_state {
-                app.participation_state = state;
+            if let PollState::Found {
+                ref mut participation_state,
+                ..
+            } = app.poll_state
+            {
+                let mut new_participation_state = None;
+                if let ParticipationState::Submitting { ref response, .. } = participation_state {
+                    new_participation_state = Some(ParticipationState::SignedIn {
+                        user: response.user.clone(),
+                        question_responses: response.responses.clone(),
+                    });
+                }
+                if let Some(state) = new_participation_state {
+                    *participation_state = state;
+                }
             }
         }
         console_log!("Initial PollState: {:?}", app.poll_state);
@@ -177,22 +180,28 @@ impl eframe::App for App {
                     }
                 });
                 self.top_panel_inner_height = Some(response.response.rect.height());
-                if let ParticipationState::SignedIn {
-                    user,
-                    question_responses: _,
-                } = &self.participation_state
+                if let PollState::Found {
+                    ref mut participation_state,
+                    ..
+                } = self.poll_state
                 {
-                    columns[1].with_layout(
-                        Layout::top_down(Align::Min).with_cross_align(Align::Center),
-                        |ui| {
-                            ui.label(RichText::new(format!("Welcome, {user}!")).strong());
-                        },
-                    );
-                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
-                        if ui.small_button("Sign Out").clicked() {
-                            self.participation_state = ParticipationState::SignIn;
-                        }
-                    });
+                    if let ParticipationState::SignedIn {
+                        user,
+                        question_responses: _,
+                    } = &participation_state
+                    {
+                        columns[1].with_layout(
+                            Layout::top_down(Align::Min).with_cross_align(Align::Center),
+                            |ui| {
+                                ui.label(RichText::new(format!("Welcome, {user}!")).strong());
+                            },
+                        );
+                        columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            if ui.small_button("Sign Out").clicked() {
+                                *participation_state = ParticipationState::SignIn;
+                            }
+                        });
+                    }
                 }
             });
         });
@@ -202,7 +211,6 @@ impl eframe::App for App {
                 ui,
                 &mut next_poll_state,
                 &self.original_url,
-                &mut self.participation_state,
                 &mut self.sign_in_data,
             );
         });

@@ -1,6 +1,6 @@
 #[allow(unused)]
 use crate::misc::{console_log, log};
-use crate::{misc::Pollable, poll::PollState, SERVER_URL};
+use crate::{misc::Pollable, participation::ParticipationState, poll::PollState, SERVER_URL};
 use areyougoing_shared::PollQueryResult;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -61,6 +61,7 @@ impl RetrievingState {
                                     last_fetch: None,
                                     stale: true,
                                     results_ui_state: Default::default(),
+                                    participation_state: ParticipationState::SignIn,
                                 });
                             }
                             PollQueryResult::NotFound => {
