@@ -39,12 +39,6 @@ pub struct CreatingUiData {
     group_border_thickness: Option<f32>,
 }
 
-#[derive(Debug)]
-pub enum SubmittingState {
-    Fetching(JsFuture),
-    Converting(JsFuture),
-}
-
 impl NewPoll {
     pub fn process(&mut self, ui: &mut Ui, poll: &mut Poll, original_url: &Option<Url>) {
         let mut next_new_poll_state = None;
