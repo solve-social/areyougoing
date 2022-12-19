@@ -1,27 +1,22 @@
-use crate::misc::{
-    console_log, get_window, listen_in_window, log, AtomicBoolExt, Submitter, UrlExt,
-};
+use crate::misc::{console_log, get_window, listen_in_window, log, AtomicBoolExt};
 use crate::new_poll::NewPoll;
 use crate::participation::ParticipationState;
+use crate::poll::PollState;
 use crate::retrieve::RetrievingState;
-use crate::time::Instant;
-use areyougoing_shared::{
-    ConditionDescription, ConditionState, Form, Poll, PollResult, ProgressReportResult, Question,
-};
-use derivative::Derivative;
-use egui::Color32;
+
+use egui::Visuals;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
+
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Duration;
+
 use url::Url;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(Deserialize, Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
-    participation_state: ParticipationState,
     poll_state: PollState,
     sign_in_data: SignInData,
     top_panel_inner_height: Option<f32>,
@@ -37,47 +32,9 @@ pub struct SignInData {
     pub old_names: Vec<String>,
 }
 
-#[derive(Derivative)]
-#[derivative(PartialEq)]
-#[derive(Deserialize, Serialize, Debug)]
-pub enum PollState {
-    None,
-    NewPoll {
-        state: NewPoll,
-        poll: Poll,
-    },
-    Retrieving {
-        key: u64,
-        #[serde(skip)]
-        #[derivative(PartialEq = "ignore")]
-        state: RetrievingState,
-    },
-    Found {
-        key: u64,
-        poll: Poll,
-        #[serde(skip)]
-        #[derivative(PartialEq = "ignore")]
-        last_fetch: Option<Instant>,
-        #[serde(skip)]
-        #[derivative(PartialEq = "ignore")]
-        poll_progress_fetch: Option<Submitter<u64, ProgressReportResult>>,
-        stale: bool,
-    },
-    NotFound {
-        key: u64,
-    },
-}
-
-impl Default for PollState {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 impl Default for App {
     fn default() -> Self {
         Self {
-            participation_state: ParticipationState::SignIn,
             poll_state: PollState::None,
             sign_in_data: SignInData {
                 user_entry: "".to_string(),
@@ -97,6 +54,13 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customized the look at feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+        let mut style = (*cc.egui_ctx.style()).clone();
+        for (_text_style, font_id) in style.text_styles.iter_mut() {
+            font_id.size *= 1.7; // whatever size you want here
+        }
+        cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_visuals(Visuals::dark());
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
@@ -158,16 +122,21 @@ impl App {
             _ => {}
         }
         {
-            let mut new_state = None;
-
-            if let ParticipationState::Submitting { ref response, .. } = app.participation_state {
-                new_state = Some(ParticipationState::SignedIn {
-                    user: response.user.clone(),
-                    question_responses: response.responses.clone(),
-                });
-            }
-            if let Some(state) = new_state {
-                app.participation_state = state;
+            if let PollState::Found {
+                ref mut participation_state,
+                ..
+            } = app.poll_state
+            {
+                let mut new_participation_state = None;
+                if let ParticipationState::Submitting { ref response, .. } = participation_state {
+                    new_participation_state = Some(ParticipationState::SignedIn {
+                        user: response.user.clone(),
+                        question_responses: response.responses.clone(),
+                    });
+                }
+                if let Some(state) = new_participation_state {
+                    *participation_state = state;
+                }
             }
         }
         console_log!("Initial PollState: {:?}", app.poll_state);
@@ -214,164 +183,39 @@ impl eframe::App for App {
                     }
                 });
                 self.top_panel_inner_height = Some(response.response.rect.height());
-                if let ParticipationState::SignedIn {
-                    user,
-                    question_responses: _,
-                } = &self.participation_state
+                if let PollState::Found {
+                    ref mut participation_state,
+                    ..
+                } = self.poll_state
                 {
-                    columns[1].with_layout(
-                        Layout::top_down(Align::Min).with_cross_align(Align::Center),
-                        |ui| {
-                            ui.label(RichText::new(format!("Welcome, {user}!")).strong());
-                        },
-                    );
-                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
-                        if ui.small_button("Sign Out").clicked() {
-                            self.participation_state = ParticipationState::SignIn;
-                        }
-                    });
+                    if let ParticipationState::SignedIn {
+                        user,
+                        question_responses: _,
+                    } = &participation_state
+                    {
+                        columns[1].with_layout(
+                            Layout::top_down(Align::Min).with_cross_align(Align::Center),
+                            |ui| {
+                                ui.label(RichText::new(format!("Welcome, {user}!")).strong());
+                            },
+                        );
+                        columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            if ui.small_button("Sign Out").clicked() {
+                                *participation_state = ParticipationState::SignIn;
+                            }
+                        });
+                    }
                 }
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| match &mut self.poll_state {
-                PollState::None => {
-                    next_poll_state = Some(PollState::NewPoll {
-                        state: NewPoll::Creating {
-                            ui_data: Default::default(),
-                            show_conditions: false,
-                        },
-                        poll: Default::default(),
-                    });
-                }
-                PollState::NewPoll { poll, state } => {
-                    state.process(ui, poll, &self.original_url);
-                }
-                PollState::Retrieving { key, ref mut state } => {
-                    ui.label(format!("Retreiving Poll #{key}"));
-                    state.process(&mut next_poll_state, *key);
-                    // Make sure the UI keeps updating in order to keep polling the fetch process
-                    ui.ctx().request_repaint_after(Duration::from_millis(100));
-                }
-                PollState::Found {
-                    key,
-                    poll,
-                    poll_progress_fetch,
-                    last_fetch,
-                    ref mut stale,
-                } => {
-                    ui.heading(format!("{} (#{key})", poll.title));
-
-                    ui.label(&poll.description);
-
-                    for PollResult {
-                        description,
-                        result,
-                        progress,
-                    } in poll.results.iter()
-                    {
-                        // let defaults = ("", ui.ctx().style().visuals.text_color(), "");
-                        let (description_text, state_result, color) = match description {
-                            ConditionDescription::AtLeast {
-                                minimum,
-                                question_index,
-                                choice_index,
-                            } => {
-                                let Question { prompt, form } = &poll.questions[*question_index];
-                                let choice = match form {
-                                    Form::ChooseOneorNone { options } => {
-                                        &options[*choice_index as usize]
-                                    }
-                                };
-                                let (state_text, color) = match progress {
-                                    ConditionState::MetOrNotMet(met) => (
-                                        (if *met { "☑" } else { "☐" }).to_string(),
-                                        if *met { Color32::GREEN } else { Color32::RED },
-                                    ),
-                                    ConditionState::Progress(progress) => (
-                                        format!("{progress}/{minimum}"),
-                                        if progress >= minimum {
-                                            Color32::GREEN
-                                        } else {
-                                            Color32::RED
-                                        },
-                                    ),
-                                };
-                                let desc = format!("≥{minimum} of \"{choice}\" to \"{prompt}\"",);
-                                (desc, state_text, color)
-                            }
-                        };
-                        let mut output = format!("{state_result}: {description_text}");
-                        if !result.is_empty() {
-                            output = format!("{output} ➡ \"{result}\"");
-                        }
-                        ui.add_enabled_ui(!*stale, |ui| {
-                            ui.colored_label(color, output);
-                        });
-                    }
-
-                    let mut fetch_complete = false;
-                    if let Some(fetch) = poll_progress_fetch {
-                        if let Some(progress) = fetch.poll() {
-                            match progress {
-                                ProgressReportResult::Success { progress } => {
-                                    for (
-                                        PollResult {
-                                            progress: condition_state,
-                                            ..
-                                        },
-                                        new_condition_state,
-                                    ) in poll.results.iter_mut().zip(progress.condition_states)
-                                    {
-                                        *condition_state = new_condition_state;
-                                    }
-                                    *stale = false;
-                                }
-                                ProgressReportResult::Error => {}
-                            }
-                            fetch_complete = true;
-                        }
-                    } else if *stale
-                        || last_fetch.is_none()
-                        || last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.0)
-                    {
-                        *poll_progress_fetch = Some(Submitter::new("progress", *key));
-                        *last_fetch = Some(Instant::now());
-                    }
-                    if fetch_complete {
-                        *poll_progress_fetch = None;
-                    }
-                    ui.ctx().request_repaint_after(Duration::from_millis(200));
-                    self.participation_state
-                        .process(ui, &mut self.sign_in_data, *key, poll, stale);
-                }
-                PollState::NotFound { key } => {
-                    ui.label(format!("No poll with ID #{key} was found 😥"));
-                }
-            });
-            if let Some(state) = next_poll_state {
-                {
-                    use PollState::*;
-                    match &state {
-                        NewPoll { .. } => {
-                            self.original_url.with_query(Option::None).push_to_window();
-                        }
-                        Found { .. } => {
-                            if let ParticipationState::SignedIn {
-                                question_responses: ref mut responses,
-                                ..
-                            } = &mut self.participation_state
-                            {
-                                // Temporary for debugging, with changing polls as we go
-                                *responses = Default::default();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                self.poll_state = state;
-            }
+            self.poll_state.process(
+                ui,
+                &mut next_poll_state,
+                &self.original_url,
+                &mut self.sign_in_data,
+            );
         });
     }
 }

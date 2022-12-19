@@ -72,20 +72,22 @@ impl NewPoll {
                     *show_conditions = !*show_conditions;
                 }
                 ui.separator();
-                ScrollArea::vertical().show(ui, |ui| {
-                    if *show_conditions {
-                        Self::show_results_form(ui, poll, ui_data);
-                    } else {
-                        Self::show_main_form(ui, poll, ui_data);
-                        ui.separator();
-                        if ui.button("SUBMIT").clicked() {
-                            next_new_poll_state = Some(NewPoll::Submitting {
-                                poll: poll.clone(),
-                                state: None,
-                            });
+                ScrollArea::vertical()
+                    .id_source("create_poll_scroll")
+                    .show(ui, |ui| {
+                        if *show_conditions {
+                            Self::show_results_form(ui, poll, ui_data);
+                        } else {
+                            Self::show_main_form(ui, poll, ui_data);
+                            ui.separator();
+                            if ui.button("SUBMIT").clicked() {
+                                next_new_poll_state = Some(NewPoll::Submitting {
+                                    poll: poll.clone(),
+                                    state: None,
+                                });
+                            }
                         }
-                    }
-                });
+                    });
             }
             NewPoll::Submitting {
                 poll,
@@ -258,15 +260,18 @@ impl NewPoll {
                         }
                         if let Some(index) = delete_i {
                             options.remove(index);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                         if options.is_empty() {
                             new_option_index = Some(0);
                         }
                         if let Some(index) = new_option_index {
-                            options.insert(index, "".to_string())
+                            options.insert(index, "".to_string());
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                         if let Some((a, b)) = swap_indices {
                             options.swap(a, b);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
                         }
                     }
                 }
@@ -280,9 +285,11 @@ impl NewPoll {
         }
         if let Some(index) = delete_i {
             poll.questions.remove(index);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         if let Some((a, b)) = swap_indices {
             poll.questions.swap(a, b);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         if poll.questions.is_empty() {
             new_question_index = Some(0);
@@ -297,6 +304,7 @@ impl NewPoll {
                     },
                 },
             );
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
     }
 

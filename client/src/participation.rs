@@ -10,7 +10,7 @@ const SIGN_IN_TEXT: &str = "SIGN IN";
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum ParticipationState {
     SignedIn {
         user: String,
@@ -35,19 +35,12 @@ impl ParticipationState {
         poll: &Poll,
         stale: &mut bool,
     ) {
-        ui.separator();
         let mut next_participation_state = None;
         match self {
             ParticipationState::SignIn => {
-                let mut sign_in_hint = "Type a name".to_string();
-                if !sign_in_data.old_names.is_empty() {
-                    sign_in_hint += " or choose one from below";
-                }
-                // ui.label(format!(
-                //     "Type your name or choose a previous name \
-                //                     from below and select \"{SIGN_IN_TEXT}\""
-                // ));
-                ui.add(TextEdit::singleline(&mut sign_in_data.user_entry).hint_text(sign_in_hint));
+                const SIGN_IN_HINT: &str = "Type a name";
+                ui.label("Participate in this poll?");
+                ui.add(TextEdit::singleline(&mut sign_in_data.user_entry).hint_text(SIGN_IN_HINT));
                 if ui.button(SIGN_IN_TEXT).clicked() {
                     next_participation_state = Some(ParticipationState::SignedIn {
                         user: sign_in_data.user_entry.clone(),
@@ -58,14 +51,19 @@ impl ParticipationState {
                     }
                     sign_in_data.user_entry = "".to_string();
                 }
-                ui.separator();
-                ScrollArea::vertical().show(ui, |ui| {
-                    for name in sign_in_data.old_names.iter().rev() {
-                        if ui.button(name).clicked() {
-                            sign_in_data.user_entry = name.to_string();
-                        }
-                    }
-                });
+                if !sign_in_data.old_names.is_empty() {
+                    ui.separator();
+                    ui.label("Autofill a previous name?");
+                    ScrollArea::vertical()
+                        .id_source("name_scroll")
+                        .show(ui, |ui| {
+                            for name in sign_in_data.old_names.iter().rev() {
+                                if ui.button(name).clicked() {
+                                    sign_in_data.user_entry = name.to_string();
+                                }
+                            }
+                        });
+                }
             }
             ParticipationState::SignedIn {
                 user,
@@ -74,45 +72,48 @@ impl ParticipationState {
                 if question_responses.is_empty() {
                     *question_responses = poll.init_responses();
                 }
-                ScrollArea::vertical().show(ui, |ui| {
-                    for (question, mut question_response) in
-                        poll.questions.iter().zip(question_responses.iter_mut())
-                    {
-                        ui.group(|ui| {
-                            ui.label(&question.prompt);
-                            match (&question.form, &mut question_response) {
-                                (
-                                    Form::ChooseOneorNone { options },
-                                    FormResponse::ChooseOneOrNone(choice),
-                                ) => {
-                                    for (i, option) in options.iter().enumerate() {
-                                        let selected =
-                                            choice.is_some() && choice.unwrap() == i as u8;
-                                        let mut button = Button::new(option);
-                                        if selected {
-                                            button = button
-                                                .fill(ui.ctx().style().visuals.selection.bg_fill);
-                                        }
-                                        let response = ui.add(button);
-                                        if !selected && response.clicked() {
-                                            *choice = Some(i as u8);
+                ScrollArea::vertical()
+                    .id_source("participation_scroll")
+                    .show(ui, |ui| {
+                        for (question, mut question_response) in
+                            poll.questions.iter().zip(question_responses.iter_mut())
+                        {
+                            ui.group(|ui| {
+                                ui.label(&question.prompt);
+                                match (&question.form, &mut question_response) {
+                                    (
+                                        Form::ChooseOneorNone { options },
+                                        FormResponse::ChooseOneOrNone(choice),
+                                    ) => {
+                                        for (i, option) in options.iter().enumerate() {
+                                            let selected =
+                                                choice.is_some() && choice.unwrap() == i as u8;
+                                            let mut button = Button::new(option);
+                                            if selected {
+                                                button = button.fill(
+                                                    ui.ctx().style().visuals.selection.bg_fill,
+                                                );
+                                            }
+                                            let response = ui.add(button);
+                                            if !selected && response.clicked() {
+                                                *choice = Some(i as u8);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        });
-                    }
-                    if ui.button("SUBMIT").clicked() {
-                        next_participation_state = Some(ParticipationState::Submitting {
-                            response: PollResponse {
-                                poll_id: key,
-                                user: user.to_string(),
-                                responses: question_responses.clone(),
-                            },
-                            state: None,
-                        });
-                    }
-                });
+                            });
+                        }
+                        if ui.button("SUBMIT").clicked() {
+                            next_participation_state = Some(ParticipationState::Submitting {
+                                response: PollResponse {
+                                    poll_id: key,
+                                    user: user.to_string(),
+                                    responses: question_responses.clone(),
+                                },
+                                state: None,
+                            });
+                        }
+                    });
             }
             ParticipationState::Submitting {
                 response,
