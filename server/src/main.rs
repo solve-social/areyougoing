@@ -230,6 +230,8 @@ impl Db {
         if let Ok(string) = fs::read_to_string(DB_PATH) {
             if let Ok(db) = ron::de::from_str(&string) {
                 return Some(db);
+            } else {
+                panic!("Failed to parse the data file that was found!");
             }
         }
         None
