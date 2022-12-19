@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use areyougoing_shared::{
-    ConditionDescription, ConditionState, CreatePollResult, Form, Poll, PollResult, Question,
+    CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Question, Requirement,
 };
 use derivative::Derivative;
 use egui::{Align, ComboBox, Layout, Pos2, Rect, ScrollArea, TextEdit, Ui, Vec2};
+use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
 use url::Url;
-use wasm_bindgen_futures::JsFuture;
 
 use crate::misc::Submitter;
 
@@ -17,7 +17,7 @@ use crate::misc::Submitter;
 pub enum NewPoll {
     Creating {
         ui_data: CreatingUiData,
-        show_conditions: bool,
+        ui_tab: UiTab,
     },
     Submitting {
         poll: Poll,
@@ -39,13 +39,26 @@ pub struct CreatingUiData {
     group_border_thickness: Option<f32>,
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq, Sequence)]
+pub enum UiTab {
+    Questions,
+    Metrics,
+    Results,
+}
+
+impl Default for UiTab {
+    fn default() -> Self {
+        Self::Questions
+    }
+}
+
 impl NewPoll {
     pub fn process(&mut self, ui: &mut Ui, poll: &mut Poll, original_url: &Option<Url>) {
         let mut next_new_poll_state = None;
         match self {
             NewPoll::Creating {
                 ref mut ui_data,
-                ref mut show_conditions,
+                ref mut ui_tab,
             } => {
                 if let Some(rect) = ui_data.available_rect {
                     if rect != ui.available_rect_before_wrap() {
@@ -57,21 +70,25 @@ impl NewPoll {
 
                 ui.heading("Create a new poll!");
 
-                let switcher_button_text = if *show_conditions {
-                    "<- Back to Questions"
-                } else {
-                    "Show Result Trackers"
-                };
-                if ui.small_button(switcher_button_text).clicked() {
-                    *show_conditions = !*show_conditions;
-                }
+                ui.horizontal_top(|ui| {
+                    for tab in all::<UiTab>() {
+                        ui.add_enabled_ui(*ui_tab != tab, |ui| {
+                            if ui
+                                .small_button(format!("{tab:?}").split(':').last().unwrap())
+                                .clicked()
+                            {
+                                *ui_tab = UiTab::Questions;
+                            }
+                        });
+                    }
+                });
+
                 ui.separator();
-                ScrollArea::vertical()
-                    .id_source("create_poll_scroll")
-                    .show(ui, |ui| {
-                        if *show_conditions {
-                            Self::show_results_form(ui, poll, ui_data);
-                        } else {
+
+                ScrollArea::vertical().id_source("create_poll_scroll").show(
+                    ui,
+                    |ui| match ui_tab {
+                        UiTab::Questions => {
                             Self::show_main_form(ui, poll, ui_data);
                             ui.separator();
                             if ui.button("SUBMIT").clicked() {
@@ -81,7 +98,14 @@ impl NewPoll {
                                 });
                             }
                         }
-                    });
+                        UiTab::Metrics => {
+                            Self::show_metrics_form(ui, poll, ui_data);
+                        }
+                        UiTab::Results => {
+                            Self::show_results_form(ui, poll, ui_data);
+                        }
+                    },
+                );
             }
             NewPoll::Submitting {
                 poll,
@@ -302,19 +326,19 @@ impl NewPoll {
         }
     }
 
-    fn show_results_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
+    fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
         let mut new_index = None;
         let mut delete_i = None;
         let mut swap_indices = None;
 
-        if ui.small_button("Add Result Tracker").clicked() {
+        if ui.small_button("Add Metric").clicked() {
             new_index = Some(0);
         }
 
-        let num_results = poll.results.len();
-        for (result_i, result) in poll.results.iter_mut().enumerate() {
+        let num_metrics = poll.results.len();
+        for (metric_i, metric_tracker) in poll.metric_trackers.iter_mut().enumerate() {
             let response = ui.group(|ui| {
-                let label_response = ui.label(format!("Result Tracker {}", result_i + 1));
+                let label_response = ui.label(format!("Metric {}", metric_i + 1));
                 if let Some(fields_rect) = ui_data.fields_rect {
                     let result_controls_rect = Rect {
                         min: Pos2 {
@@ -333,7 +357,135 @@ impl NewPoll {
 
                             if ui
                                 .small_button("🗑")
-                                .on_hover_text("Delete result tracker")
+                                .on_hover_text("Delete metric")
+                                .clicked()
+                            {
+                                delete_i = Some(metric_i);
+                            }
+                            ui.add_enabled_ui(metric_i < num_metrics - 1, |ui| {
+                                if ui
+                                    .small_button("⬇")
+                                    .on_hover_text("Move metric down")
+                                    .clicked()
+                                {
+                                    swap_indices = Some((metric_i, metric_i + 1));
+                                }
+                            });
+                            ui.add_enabled_ui(metric_i != 0, |ui| {
+                                if ui
+                                    .small_button("⬆")
+                                    .on_hover_text("Move metric up")
+                                    .clicked()
+                                {
+                                    swap_indices = Some((metric_i, metric_i - 1));
+                                }
+                            });
+                        });
+                    });
+                }
+
+                // Keep this till bug below is fixed
+                // let response = ui.add(
+                //     TextEdit::multiline(&mut metric_tracker.hint)
+                //         .desired_rows(1)
+                //         .hint_text("Extra explanation on hover (Optional)"),
+                // );
+                // ui_data.fields_rect = Some(response.rect);
+
+                // TODO: This is unwrap is a bug. Find another way to initialize this
+                let field_shape = Vec2::new(ui_data.fields_rect.unwrap().width(), 0.);
+
+                const MAX_FIELD_LEN: usize = 20;
+                match &mut metric_tracker.metric {
+                    Metric::SpecificResponses {
+                        question_index,
+                        choice_index,
+                    } => {
+                        ui.allocate_ui(field_shape, |ui| {
+                            ComboBox::new(format!("selected_question_{metric_i}"), "Question")
+                                .show_index(ui, question_index, poll.questions.len(), |i| {
+                                    format!("{i}: {}", limit(&poll.questions[i].prompt))
+                                });
+                        });
+                        match &poll.questions[*question_index].form {
+                            Form::ChooseOneorNone { options } => {
+                                let mut selected = *choice_index as usize;
+                                ui.allocate_ui(field_shape, |ui| {
+                                    ComboBox::new(format!("selected_answer_{metric_i}"), "Answer")
+                                        .show_index(ui, &mut selected, options.len(), |i| {
+                                            format!("{i}: {}", limit(&options[i]))
+                                        });
+                                });
+
+                                *choice_index = selected as u8;
+                            }
+                        }
+                    }
+                }
+                ui.checkbox(
+                    &mut metric_tracker.publicly_visible,
+                    "Show progress publicly",
+                );
+            });
+            if metric_i == 0 {
+                ui_data.question_group_rect = Some(response.response.rect);
+            }
+            if ui.small_button("Add Metric").clicked() {
+                new_index = Some(metric_i + 1);
+            }
+        }
+        if let Some(index) = delete_i {
+            poll.results.remove(index);
+        }
+        if let Some((a, b)) = swap_indices {
+            poll.results.swap(a, b);
+        }
+        if let Some(index) = new_index {
+            poll.metric_trackers.insert(
+                index,
+                MetricTracker {
+                    publicly_visible: false,
+                    metric: Metric::SpecificResponses {
+                        question_index: 0,
+                        choice_index: 0,
+                    },
+                },
+            );
+        }
+    }
+
+    fn show_results_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
+        let mut new_index = None;
+        let mut delete_i = None;
+        let mut swap_indices = None;
+
+        if ui.small_button("Add Result").clicked() {
+            new_index = Some(0);
+        }
+
+        let num_results = poll.results.len();
+        for (result_i, result) in poll.results.iter_mut().enumerate() {
+            let response = ui.group(|ui| {
+                let label_response = ui.label(format!("Result {}", result_i + 1));
+                if let Some(fields_rect) = ui_data.fields_rect {
+                    let result_controls_rect = Rect {
+                        min: Pos2 {
+                            x: label_response.rect.right(),
+                            y: label_response.rect.top(),
+                        },
+                        max: Pos2 {
+                            x: fields_rect.right(),
+                            y: label_response.rect.bottom(),
+                        },
+                    };
+                    ui.allocate_ui_at_rect(result_controls_rect, |ui| {
+                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            ui.spacing_mut().button_padding = Vec2 { x: 0., y: 0.0 };
+                            ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
+
+                            if ui
+                                .small_button("🗑")
+                                .on_hover_text("Delete result")
                                 .clicked()
                             {
                                 delete_i = Some(result_i);
@@ -341,7 +493,7 @@ impl NewPoll {
                             ui.add_enabled_ui(result_i < num_results - 1, |ui| {
                                 if ui
                                     .small_button("⬇")
-                                    .on_hover_text("Move result tracker down")
+                                    .on_hover_text("Move result down")
                                     .clicked()
                                 {
                                     swap_indices = Some((result_i, result_i + 1));
@@ -350,7 +502,7 @@ impl NewPoll {
                             ui.add_enabled_ui(result_i != 0, |ui| {
                                 if ui
                                     .small_button("⬆")
-                                    .on_hover_text("Move result tracker up")
+                                    .on_hover_text("Move result up")
                                     .clicked()
                                 {
                                     swap_indices = Some((result_i, result_i - 1));
@@ -360,59 +512,74 @@ impl NewPoll {
                     });
                 }
                 let response = ui.add(
-                    TextEdit::multiline(&mut result.result)
+                    TextEdit::multiline(&mut result.desc)
                         .desired_rows(1)
-                        .hint_text("What happens if condition is met? (Optional)"),
+                        .hint_text("What happens if requirements are met?"),
                 );
                 ui_data.fields_rect = Some(response.rect);
                 let field_shape = Vec2::new(response.rect.width(), 0.);
 
-                let mut selected = match &result.description {
-                    ConditionDescription::AtLeast { .. } => 0,
+                let mut selected = match &result.requirements[0] {
+                    Requirement::AtLeast { .. } => 0,
                 };
                 let selected_before = selected;
                 const TYPES: &[&str] = &["At Least X Specific Responses"];
                 ui.allocate_ui(field_shape, |ui| {
-                    ComboBox::new(format!("condition_type_{result_i}"), "Condition Type")
+                    ComboBox::new(format!("requirement_type_{result_i}"), "Requirements Type")
                         .show_index(ui, &mut selected, 1, |i| TYPES[i].to_string());
                 });
                 if selected != selected_before {
-                    result.description = match selected {
-                        0 => ConditionDescription::AtLeast {
+                    result.requirements[0] = match selected {
+                        0 => Requirement::AtLeast {
                             minimum: 1,
-                            question_index: 0,
-                            choice_index: 0,
+                            metric_index: 0,
                         },
                         _ => unreachable!(),
                     };
                 }
 
                 const MAX_FIELD_LEN: usize = 20;
-                match &mut result.description {
-                    ConditionDescription::AtLeast {
+                match &mut result.requirements[0] {
+                    Requirement::AtLeast {
                         minimum,
-                        question_index,
-                        choice_index,
+                        metric_index,
                     } => {
-                        ui.allocate_ui(field_shape, |ui| {
-                            ComboBox::new(format!("selected_question_{result_i}"), "Question")
-                                .show_index(ui, question_index, poll.questions.len(), |i| {
-                                    format!("{i}: {}", limit(&poll.questions[i].prompt))
-                                });
-                        });
-                        match &poll.questions[*question_index].form {
-                            Form::ChooseOneorNone { options } => {
-                                let mut selected = *choice_index as usize;
-                                ui.allocate_ui(field_shape, |ui| {
-                                    ComboBox::new(format!("selected_answer_{result_i}"), "Answer")
-                                        .show_index(ui, &mut selected, options.len(), |i| {
-                                            format!("{i}: {}", limit(&options[i]))
-                                        });
-                                });
-
-                                *choice_index = selected as u8;
-                            }
-                        }
+                        *metric_index = {
+                            let compatible_metrics = poll
+                                .metric_trackers
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, metric_tracker)| match metric_tracker.metric {
+                                    Metric::SpecificResponses { .. } => true,
+                                })
+                                .collect::<Vec<_>>();
+                            let mut sub_index = compatible_metrics
+                                .iter()
+                                .map(|(i, _)| *i)
+                                .find(|i| *i == *metric_index as usize)
+                                .unwrap_or(0);
+                            ui.allocate_ui(field_shape, |ui| {
+                                ComboBox::new(format!("selected_metric_{result_i}"), "Metric")
+                                    .show_index(
+                                        ui,
+                                        &mut sub_index,
+                                        compatible_metrics.len(),
+                                        |i| {
+                                            format!(
+                                                "{}: {}",
+                                                &compatible_metrics[i].0,
+                                                limit(
+                                                    &compatible_metrics[i]
+                                                        .1
+                                                        .metric
+                                                        .render(&poll.questions)
+                                                )
+                                            )
+                                        },
+                                    );
+                            });
+                            compatible_metrics[sub_index].0 as u16
+                        };
 
                         let mut minimum_usize = *minimum as usize - 1;
                         ui.allocate_ui(field_shape, |ui| {
@@ -423,37 +590,14 @@ impl NewPoll {
                                 |i| (i + 1).to_string(),
                             );
                         });
-                        *minimum = minimum_usize as u16 + 1;
+                        *minimum = minimum_usize as u64 + 1;
                     }
-                }
-                ui.label("How should progress be publicly displayed?");
-
-                let mut selected_index = match &result.progress {
-                    ConditionState::MetOrNotMet(..) => 0,
-                    ConditionState::Progress(..) => 1,
-                };
-                const METHODS: &[&str] = &[
-                    "Only show whether condition is met",
-                    "Show progress toward condition",
-                ];
-                ui.allocate_ui(field_shape, |ui| {
-                    ComboBox::new(format!("condition_state_{result_i}"), "").show_index(
-                        ui,
-                        &mut selected_index,
-                        2,
-                        |i| METHODS[i].to_string(),
-                    );
-                });
-                result.progress = match selected_index {
-                    0 => ConditionState::MetOrNotMet(false),
-                    1 => ConditionState::Progress(0),
-                    _ => unreachable!(),
                 }
             });
             if result_i == 0 {
                 ui_data.question_group_rect = Some(response.response.rect);
             }
-            if ui.small_button("Add Result Tracker").clicked() {
+            if ui.small_button("Add Result").clicked() {
                 new_index = Some(result_i + 1);
             }
         }
@@ -466,14 +610,9 @@ impl NewPoll {
         if let Some(index) = new_index {
             poll.results.insert(
                 index,
-                PollResult {
-                    description: ConditionDescription::AtLeast {
-                        minimum: 1,
-                        question_index: 0,
-                        choice_index: 0,
-                    },
-                    progress: ConditionState::MetOrNotMet(false),
-                    result: "".to_string(),
+                PollResult2 {
+                    desc: "".to_string(),
+                    requirements: Vec::new(),
                 },
             );
         }

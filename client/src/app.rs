@@ -108,7 +108,7 @@ impl App {
                 app.poll_state = PollState::NewPoll {
                     state: NewPoll::Creating {
                         ui_data: Default::default(),
-                        show_conditions: false,
+                        ui_tab: Default::default(),
                     },
                     poll: Default::default(),
                 };
@@ -176,7 +176,7 @@ impl eframe::App for App {
                         next_poll_state = Some(PollState::NewPoll {
                             state: NewPoll::Creating {
                                 ui_data: Default::default(),
-                                show_conditions: false,
+                                ui_tab: Default::default(),
                             },
                             poll: Default::default(),
                         });

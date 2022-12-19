@@ -6,9 +6,9 @@ use std::{
 };
 
 use areyougoing_shared::{
-    ConditionDescription, ConditionState, CreatePollResult, Form, FormResponse, Poll, PollProgress,
-    PollQueryResult, PollResponse, PollResult, PollStatus, PollSubmissionResult,
-    ProgressReportResult, Question,
+    CreatePollResult, Form, FormResponse, Metric, MetricTracker, Poll, PollProgress,
+    PollQueryResult, PollResponse, PollResult2, PollStatus, PollSubmissionResult, Progress,
+    ProgressReportResult, Question, Requirement, ResultState,
 };
 use axum::{
     extract::Query,
@@ -116,6 +116,14 @@ async fn new_poll(
         db.0.insert(
             key,
             PollData {
+                result_states: poll.results.iter().map(ResultState::from_result).collect(),
+                progresses: poll
+                    .metric_trackers
+                    .iter()
+                    .map(|t| match t.metric {
+                        Metric::SpecificResponses { .. } => Progress::Count(0),
+                    })
+                    .collect(),
                 poll,
                 responses: Default::default(),
             },
@@ -153,11 +161,19 @@ async fn get_progress(
 
         ProgressReportResult::Success {
             progress: PollProgress {
-                condition_states: poll_data
+                result_states: poll_data.result_states.clone(),
+                metric_progresses: poll_data
                     .poll
-                    .results
+                    .metric_trackers
                     .iter()
-                    .map(|r| r.progress.clone())
+                    .zip(poll_data.progresses.iter())
+                    .map(|(t, p)| {
+                        if t.publicly_visible {
+                            Some(p.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect(),
             },
         }
@@ -179,13 +195,33 @@ impl Config {
 struct PollData {
     poll: Poll,
     responses: HashMap<String, Vec<FormResponse>>,
+    progresses: Vec<Progress>,
+    result_states: Vec<ResultState>,
 }
 
 impl PollData {
     pub fn update_results(&mut self) {
-        for result in self.poll.results.iter_mut() {
-            result.update(&self.responses);
-        }
+        self.progresses = self
+            .poll
+            .metric_trackers
+            .iter()
+            .map(|t| t.metric.calculate_progress(&self.responses))
+            .collect();
+        self.result_states = self
+            .poll
+            .results
+            .iter()
+            .map(|r| {
+                r.requirements
+                    .iter()
+                    .map(|r| r.evaluate(&self.progresses))
+                    .collect::<Vec<_>>()
+            })
+            .map(|requirements_met| ResultState {
+                overall_met: requirements_met.iter().all(|x| *x),
+                requirements_met,
+            })
+            .collect();
     }
 }
 
@@ -230,14 +266,19 @@ impl Db {
                         announcement: None,
                         description: "Today, 3pm, you know where".to_string(),
                         expiration: None,
-                        results: vec![PollResult {
-                            description: ConditionDescription::AtLeast {
+                        results: vec![PollResult2 {
+                            requirements: vec![Requirement::AtLeast {
+                                metric_index: 0,
                                 minimum: 2,
+                            }],
+                            desc: "The party happens".to_string(),
+                        }],
+                        metric_trackers: vec![MetricTracker {
+                            metric: Metric::SpecificResponses {
                                 question_index: 0,
                                 choice_index: 0,
                             },
-                            progress: ConditionState::default(),
-                            result: "The party happens".to_string(),
+                            publicly_visible: true,
                         }],
                         status: PollStatus::SeekingResponses,
                         questions: vec![
@@ -272,6 +313,8 @@ impl Db {
                         ],
                     },
                     responses: Default::default(),
+                    progresses: Vec::new(),
+                    result_states: Vec::new(),
                 },
             );
             db
