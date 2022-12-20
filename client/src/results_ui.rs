@@ -1,5 +1,5 @@
 use crate::{
-    misc::{Submitter, UiExt},
+    misc::{console_log, Submitter, UiExt},
     time::Instant,
 };
 use areyougoing_shared::{Poll, PollProgress, Progress, ProgressReportResult, Requirement};
@@ -43,6 +43,8 @@ pub struct ResultsUiState {
     result_rects: Vec<Rect>,
     progress_rects: Vec<Rect>,
     condition_rects: Vec<Rect>,
+    metrics_heading_rect: Option<Rect>,
+    results_heading_rect: Option<Rect>,
 }
 
 #[inline]
@@ -77,17 +79,35 @@ impl ResultsUi {
                     left_right_col_width,
                 ],
                 |columns| {
-                    let heading_rect = if let Some(rect) = self.ui_state.metric_rects.first() {
-                        Rect {
-                            min: pos2(rect.left(), columns[0].available_rect_before_wrap().top()),
-                            max: pos2(rect.right(), f32::INFINITY),
-                        }
-                    } else {
-                        columns[0].available_rect_before_wrap()
+                    console_log!(
+                        "{:?}, {:?}, {:?}",
+                        columns[0].available_size(),
+                        columns[1].available_size(),
+                        columns[2].available_size()
+                    );
+                    let mut size = columns[0].available_size();
+                    size.y = 0.;
+
+                    let heading_rect = match (
+                        self.ui_state.metric_rects.first(),
+                        self.ui_state.metrics_heading_rect,
+                    ) {
+                        (Some(top_metric_rect), Some(previous_heading_rect)) => Rect {
+                            min: pos2(
+                                top_metric_rect.center().x - previous_heading_rect.width() / 2.0,
+                                columns[0].cursor().top(),
+                            ),
+                            max: pos2(
+                                top_metric_rect.center().x + previous_heading_rect.width() / 2.0,
+                                f32::INFINITY,
+                            ),
+                        },
+                        _ => columns[0].available_rect_before_wrap(),
                     };
                     columns[0].allocate_ui_at_rect(heading_rect, |ui| {
                         ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                            ui.label(RichText::new("Metrics").underline().strong());
+                            let response = ui.label(RichText::new("Metrics").underline().strong());
+                            self.ui_state.metrics_heading_rect = Some(response.rect);
                         });
                     });
 
@@ -98,8 +118,6 @@ impl ResultsUi {
                         .zip(poll_progress.metric_progresses.iter())
                         .enumerate()
                     {
-                        let mut size = columns[0].available_size();
-                        size.y = 0.;
                         columns[0].allocate_ui_with_layout(
                             size,
                             Layout::right_to_left(Align::Center),
