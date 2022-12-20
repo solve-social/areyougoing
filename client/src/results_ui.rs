@@ -244,14 +244,14 @@ impl ResultsUi {
                     Stroke::new(3.0, choose_color(result_state.overall_met)),
                 );
             }
-
-            ui.ctx().request_repaint_after(Duration::from_millis(200));
+        } else {
+            ui.spinner();
         }
 
-        self.fetch(key);
+        self.fetch(ui, key);
     }
 
-    fn fetch(&mut self, key: u64) {
+    fn fetch(&mut self, ui: &mut Ui, key: u64) {
         let mut fetch_complete = false;
         if let Some(ref mut fetch) = self.poll_progress_fetch {
             if let Some(progress) = fetch.poll() {
@@ -266,7 +266,7 @@ impl ResultsUi {
             }
         } else if self.stale
             || self.last_fetch.is_none()
-            || self.last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.0)
+            || self.last_fetch.unwrap().elapsed() > Duration::from_secs_f32(1.5)
         {
             self.poll_progress_fetch = Some(Submitter::new("progress", key));
             self.last_fetch = Some(Instant::now());
@@ -274,5 +274,8 @@ impl ResultsUi {
         if fetch_complete {
             self.poll_progress_fetch = None;
         }
+
+        ui.indicate_loading(&self.last_fetch);
+        ui.ctx().request_repaint_after(Duration::from_millis(200));
     }
 }

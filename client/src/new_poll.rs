@@ -1,14 +1,13 @@
-use crate::misc::{console_log, Submitter};
+use crate::misc::{Submitter, UiExt};
 use areyougoing_shared::{
     CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Question, Requirement,
 };
 use derivative::Derivative;
-use egui::{Align, ComboBox, Layout, Pos2, Rect, ScrollArea, TextEdit, Ui, Vec2};
+use egui::{pos2, Align, Button, ComboBox, Layout, Pos2, Rect, ScrollArea, TextEdit, Ui, Vec2};
 use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use url::Url;
-
-use crate::misc::Submitter;
 
 #[derive(Derivative)]
 #[derivative(PartialEq)]
@@ -36,6 +35,7 @@ pub struct CreatingUiData {
     question_group_rect: Option<Rect>,
     available_rect: Option<Rect>,
     group_border_thickness: Option<f32>,
+    tabs_rect: Option<Rect>,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Sequence)]
@@ -69,42 +69,63 @@ impl NewPoll {
 
                 ui.heading("Create a new poll!");
 
-                ui.horizontal_top(|ui| {
-                    for tab in all::<UiTab>() {
-                        ui.add_enabled_ui(*ui_tab != tab, |ui| {
-                            if ui
-                                .small_button(format!("{tab:?}").split(':').last().unwrap())
-                                .clicked()
-                            {
-                                *ui_tab = UiTab::Questions;
-                            }
-                        });
+                let tabs_rect = if let Some(rect) = ui_data.tabs_rect {
+                    let left_margin = (ui.available_width() - rect.width()).max(0.) / 2.0;
+                    Rect {
+                        min: pos2(left_margin, ui.cursor().top()),
+                        max: pos2(ui.available_width(), f32::INFINITY),
                     }
+                } else {
+                    ui.max_rect()
+                };
+
+                ui.allocate_ui_at_rect(tabs_rect, |ui| {
+                    let response = ui.with_layout(
+                        Layout::left_to_right(Align::Min).with_main_wrap(true),
+                        |ui| {
+                            for tab in all::<UiTab>() {
+                                ui.add_enabled_ui(*ui_tab != tab, |ui| {
+                                    let mut button =
+                                        Button::new(format!("{tab:?}").split(':').last().unwrap())
+                                            .small();
+                                    if *ui_tab == tab {
+                                        button = button.fill(ui.style().visuals.selection.bg_fill);
+                                    }
+                                    if ui.add(button).clicked() {
+                                        *ui_tab = tab;
+                                    }
+                                });
+                            }
+                        },
+                    );
+                    ui_data.tabs_rect =
+                        Some(response.response.rect.shrink2(ui.spacing().item_spacing));
                 });
 
                 ui.separator();
 
-                ScrollArea::vertical().id_source("create_poll_scroll").show(
-                    ui,
-                    |ui| match ui_tab {
-                        UiTab::Questions => {
-                            Self::show_main_form(ui, poll, ui_data);
-                            ui.separator();
-                            if ui.button("SUBMIT").clicked() {
-                                next_new_poll_state = Some(NewPoll::Submitting {
-                                    poll: poll.clone(),
-                                    state: None,
-                                });
+                ScrollArea::vertical()
+                    .id_source("create_poll_scroll")
+                    .show(ui, |ui| {
+                        match ui_tab {
+                            UiTab::Questions => {
+                                Self::show_main_form(ui, poll, ui_data);
+                            }
+                            UiTab::Metrics => {
+                                Self::show_metrics_form(ui, poll, ui_data);
+                            }
+                            UiTab::Results => {
+                                Self::show_results_form(ui, poll, ui_data);
                             }
                         }
-                        UiTab::Metrics => {
-                            Self::show_metrics_form(ui, poll, ui_data);
+                        ui.separator();
+                        if ui.button("SUBMIT").clicked() {
+                            next_new_poll_state = Some(NewPoll::Submitting {
+                                poll: poll.clone(),
+                                state: None,
+                            });
                         }
-                        UiTab::Results => {
-                            Self::show_results_form(ui, poll, ui_data);
-                        }
-                    },
-                );
+                    });
             }
             NewPoll::Submitting {
                 poll,
@@ -334,7 +355,7 @@ impl NewPoll {
             new_index = Some(0);
         }
 
-        let num_metrics = poll.results.len();
+        let num_metrics = poll.metric_trackers.len();
         for (metric_i, metric_tracker) in poll.metric_trackers.iter_mut().enumerate() {
             let response = ui.group(|ui| {
                 let label_response = ui.label(format!("Metric {}", metric_i + 1));
@@ -383,16 +404,8 @@ impl NewPoll {
                     });
                 }
 
-                // Keep this till bug below is fixed
-                // let response = ui.add(
-                //     TextEdit::multiline(&mut metric_tracker.hint)
-                //         .desired_rows(1)
-                //         .hint_text("Extra explanation on hover (Optional)"),
-                // );
-                // ui_data.fields_rect = Some(response.rect);
-
-                // TODO: This is unwrap is a bug. Find another way to initialize this
-                let field_shape = Vec2::new(ui_data.fields_rect.unwrap().width(), 0.);
+                let desired_width = ui.standard_width();
+                let field_shape = Vec2::new(desired_width, 0.);
 
                 const MAX_FIELD_LEN: usize = 20;
                 match &mut metric_tracker.metric {
@@ -400,8 +413,10 @@ impl NewPoll {
                         question_index,
                         choice_index,
                     } => {
+                        ui.label("Question");
                         ui.allocate_ui(field_shape, |ui| {
-                            ComboBox::new(format!("selected_question_{metric_i}"), "Question")
+                            ComboBox::from_id_source(format!("selected_question_{metric_i}"))
+                                .width(desired_width)
                                 .show_index(ui, question_index, poll.questions.len(), |i| {
                                     format!("{i}: {}", limit(&poll.questions[i].prompt))
                                 });
@@ -409,8 +424,9 @@ impl NewPoll {
                         match &poll.questions[*question_index].form {
                             Form::ChooseOneorNone { options } => {
                                 let mut selected = *choice_index as usize;
+                                ui.label("Answer");
                                 ui.allocate_ui(field_shape, |ui| {
-                                    ComboBox::new(format!("selected_answer_{metric_i}"), "Answer")
+                                    ComboBox::from_id_source(format!("selected_answer_{metric_i}"))
                                         .show_index(ui, &mut selected, options.len(), |i| {
                                             format!("{i}: {}", limit(&options[i]))
                                         });
@@ -458,6 +474,10 @@ impl NewPoll {
         let mut delete_i = None;
         let mut swap_indices = None;
 
+        if poll.metric_trackers.is_empty() {
+            ui.label("Before you can add a result, you need to add at least one metric.");
+            return;
+        }
         if ui.small_button("Add Result").clicked() {
             new_index = Some(0);
         }
@@ -513,7 +533,7 @@ impl NewPoll {
                 let response = ui.add(
                     TextEdit::multiline(&mut result.desc)
                         .desired_rows(1)
-                        .hint_text("What happens if requirements are met?"),
+                        .hint_text("What will happen?"),
                 );
                 ui_data.fields_rect = Some(response.rect);
                 let field_shape = Vec2::new(response.rect.width(), 0.);
@@ -522,9 +542,11 @@ impl NewPoll {
                     Requirement::AtLeast { .. } => 0,
                 };
                 let selected_before = selected;
-                const TYPES: &[&str] = &["At Least X Specific Responses"];
+                const TYPES: &[&str] = &["At Least X"];
+                ui.label("Requirements Type");
                 ui.allocate_ui(field_shape, |ui| {
-                    ComboBox::new(format!("requirement_type_{result_i}"), "Requirements Type")
+                    ComboBox::from_id_source(format!("requirement_type_{result_i}"))
+                        .width(ui.standard_width())
                         .show_index(ui, &mut selected, 1, |i| TYPES[i].to_string());
                 });
                 if selected != selected_before {
@@ -557,8 +579,9 @@ impl NewPoll {
                                 .map(|(i, _)| *i)
                                 .find(|i| *i == *metric_index as usize)
                                 .unwrap_or(0);
+                            ui.label("Metric");
                             ui.allocate_ui(field_shape, |ui| {
-                                ComboBox::new(format!("selected_metric_{result_i}"), "Metric")
+                                ComboBox::from_id_source(format!("selected_metric_{result_i}"))
                                     .show_index(
                                         ui,
                                         &mut sub_index,
@@ -580,9 +603,10 @@ impl NewPoll {
                             compatible_metrics[sub_index].0 as u16
                         };
 
+                        ui.label("Minimum");
                         let mut minimum_usize = *minimum as usize - 1;
                         ui.allocate_ui(field_shape, |ui| {
-                            ComboBox::new(format!("minimum_{result_i}"), "Minimum").show_index(
+                            ComboBox::from_id_source(format!("minimum_{result_i}")).show_index(
                                 ui,
                                 &mut minimum_usize,
                                 30,
@@ -611,7 +635,10 @@ impl NewPoll {
                 index,
                 PollResult2 {
                     desc: "".to_string(),
-                    requirements: Vec::new(),
+                    requirements: vec![Requirement::AtLeast {
+                        metric_index: 0,
+                        minimum: 1,
+                    }],
                 },
             );
         }
