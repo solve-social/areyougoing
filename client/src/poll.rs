@@ -53,8 +53,8 @@ impl PollState {
             PollState::None => {
                 *next_poll_state = Some(PollState::NewPoll {
                     state: NewPoll::Creating {
+                        ui_tab: Default::default(),
                         ui_data: Default::default(),
-                        show_conditions: false,
                     },
                     poll: Default::default(),
                 });

@@ -41,6 +41,116 @@ pub enum ConditionDescription {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub enum Metric {
+    SpecificResponses {
+        question_index: usize,
+        choice_index: u8,
+    },
+}
+
+impl Metric {
+    pub fn render(&self, questions: &[Question]) -> String {
+        match self {
+            Metric::SpecificResponses {
+                question_index,
+                choice_index,
+            } => {
+                let Question { prompt, form } = &questions[*question_index];
+                let choice = match form {
+                    Form::ChooseOneorNone { options } => &options[*choice_index as usize],
+                };
+                format!("\"{choice}\" to \"{prompt}\"")
+            }
+        }
+    }
+}
+
+impl Default for Metric {
+    fn default() -> Self {
+        Self::SpecificResponses {
+            question_index: 0,
+            choice_index: 0,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
+pub struct MetricTracker {
+    pub metric: Metric,
+    pub publicly_visible: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub enum Progress {
+    Count(u64),
+}
+
+impl Metric {
+    pub fn calculate_progress(&self, responses: &HashMap<String, Vec<FormResponse>>) -> Progress {
+        match self {
+            Metric::SpecificResponses {
+                question_index,
+                choice_index,
+            } => {
+                let mut count = 0;
+                for poll_response in responses.values() {
+                    match poll_response.get(*question_index).unwrap() {
+                        FormResponse::ChooseOneOrNone(choice) => {
+                            if let Some(chosen_index) = choice {
+                                if chosen_index == choice_index {
+                                    count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                Progress::Count(count)
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub enum Requirement {
+    AtLeast { metric_index: u16, minimum: u64 },
+}
+
+impl Requirement {
+    pub fn evaluate(&self, progresses: &[Progress]) -> bool {
+        match self {
+            Requirement::AtLeast {
+                minimum,
+                metric_index,
+            } => {
+                let Progress::Count(count) = progresses.get(*metric_index as usize).unwrap();
+                count >= minimum
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub struct PollResult2 {
+    pub desc: String,
+    pub requirements: Vec<Requirement>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+pub struct ResultState {
+    pub requirements_met: Vec<bool>,
+    pub overall_met: bool,
+}
+
+impl ResultState {
+    pub fn from_result(result: &PollResult2) -> Self {
+        Self {
+            requirements_met: vec![false; result.requirements.len()],
+            overall_met: false,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum ConditionState {
     MetOrNotMet(bool),
     Progress(u16),
@@ -104,7 +214,8 @@ impl PollResult {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct PollProgress {
-    pub condition_states: Vec<ConditionState>,
+    pub metric_progresses: Vec<Option<Progress>>,
+    pub result_states: Vec<ResultState>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
@@ -113,7 +224,8 @@ pub struct Poll {
     pub description: String,
     pub expiration: Option<DateTime<Utc>>,
     pub announcement: Option<String>,
-    pub results: Vec<PollResult>,
+    pub metric_trackers: Vec<MetricTracker>,
+    pub results: Vec<PollResult2>,
     pub status: PollStatus,
     pub questions: Vec<Question>,
 }

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use egui::{pos2, vec2, Align, Layout, Rect, Sense, Ui};
+use egui::{pos2, vec2, Align, Layout, NumExt, Rect, RichText, Sense, Ui};
 use futures_lite::{future, Future};
 use gloo::events::EventListener;
 use gloo::{console::__macro::JsValue, net::http::RequestMode};
@@ -23,6 +23,7 @@ extern "C" {
 #[allow(unused)]
 macro_rules! console_log {
     ($($t:tt)*) => (
+        use $crate::misc::log;
         #[allow(unused_unsafe)]
         unsafe{log(&format_args!($($t)*).to_string())}
     )
@@ -124,6 +125,7 @@ pub struct Submitter<SendT, ReceiveT> {
     receive_t: PhantomData<ReceiveT>,
 }
 
+use crate::time::Instant;
 use crate::SERVER_URL;
 
 impl<SendT: Serialize, ReceiveT: Debug + for<'de> Deserialize<'de>> Submitter<SendT, ReceiveT> {
@@ -202,6 +204,10 @@ pub trait UiExt {
     ) -> R
     where
         Self: std::marker::Sized;
+
+    fn standard_width(&self) -> f32;
+
+    fn indicate_loading(&mut self, last_time: &Option<Instant>);
 }
 
 impl UiExt for Ui {
@@ -258,5 +264,25 @@ impl UiExt for Ui {
         self.allocate_rect(Rect::from_min_size(top_left, size), Sense::drag());
         // self.advance_cursor_after_rect(Rect::from_min_size(top_left, size));
         result
+    }
+
+    fn standard_width(&self) -> f32 {
+        const MIN_WIDTH: f32 = 24.0;
+        let available_width = self.available_width().at_least(MIN_WIDTH);
+        self.spacing().text_edit_width.min(available_width)
+    }
+
+    fn indicate_loading(&mut self, last_time: &Option<Instant>) {
+        let mut ui = self.child_ui(self.ctx().available_rect(), Layout::bottom_up(Align::Max));
+        if let Some(last_time) = last_time {
+            ui.label(
+                RichText::new(last_time.elapsed().as_secs().to_string())
+                    .small()
+                    .weak()
+                    .color(ui.style().visuals.weak_text_color().linear_multiply(0.1)),
+            );
+        } else {
+            ui.spinner();
+        }
     }
 }
