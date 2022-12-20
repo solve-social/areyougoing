@@ -79,12 +79,6 @@ impl ResultsUi {
                     left_right_col_width,
                 ],
                 |columns| {
-                    console_log!(
-                        "{:?}, {:?}, {:?}",
-                        columns[0].available_size(),
-                        columns[1].available_size(),
-                        columns[2].available_size()
-                    );
                     let mut size = columns[0].available_size();
                     size.y = 0.;
 
