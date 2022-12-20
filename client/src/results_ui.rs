@@ -173,17 +173,28 @@ impl ResultsUi {
                         );
                     }
 
-                    let heading_rect = if let Some(rect) = self.ui_state.result_rects.first() {
-                        Rect {
-                            min: pos2(rect.left(), columns[2].available_rect_before_wrap().top()),
-                            max: pos2(rect.right(), f32::INFINITY),
-                        }
-                    } else {
-                        columns[2].available_rect_before_wrap()
+                    let heading_rect = match (
+                        self.ui_state.result_rects.first(),
+                        self.ui_state.results_heading_rect,
+                    ) {
+                        (Some(top_metric_rect), Some(previous_heading_rect)) => Rect {
+                            min: pos2(
+                                top_metric_rect.center().x - previous_heading_rect.width() / 2.0,
+                                columns[2].cursor().top(),
+                            ),
+                            max: pos2(
+                                top_metric_rect.center().x
+                                    + previous_heading_rect.width() / 2.0
+                                    + 1.0,
+                                f32::INFINITY,
+                            ),
+                        },
+                        _ => columns[2].available_rect_before_wrap(),
                     };
                     columns[2].allocate_ui_at_rect(heading_rect, |ui| {
                         ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                            ui.label(RichText::new("Results").underline().strong());
+                            let response = ui.label(RichText::new("Results").underline().strong());
+                            self.ui_state.results_heading_rect = Some(response.rect);
                         });
                     });
 
