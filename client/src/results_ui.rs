@@ -114,7 +114,7 @@ impl ResultsUi {
                                                 metric_rect.height() / 2.
                                                     - ui.text_style_height(&TextStyle::Body) / 2.,
                                             ))
-                                            .expand(results_frame.stroke.width);
+                                            .expand2(vec2(0.0, results_frame.stroke.width));
                                         ui.allocate_ui_at_rect(rect, |ui| {
                                             let response = results_frame.show(ui, |ui| {
                                                 ui.label(match progress {
@@ -190,7 +190,7 @@ impl ResultsUi {
                                             result.height() / 2.
                                                 - ui.text_style_height(&TextStyle::Body) / 2.,
                                         ))
-                                        .expand(results_frame.stroke.width);
+                                        .expand2(vec2(0.0, results_frame.stroke.width));
                                     ui.allocate_ui_at_rect(rect, |ui| {
                                         let response = results_frame.show(ui, |ui| {
                                             ui.colored_label(
