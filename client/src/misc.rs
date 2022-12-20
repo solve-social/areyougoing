@@ -23,9 +23,8 @@ extern "C" {
 #[allow(unused)]
 macro_rules! console_log {
     ($($t:tt)*) => (
-        use $crate::misc::log;
         #[allow(unused_unsafe)]
-        unsafe{log(&format_args!($($t)*).to_string())}
+        unsafe{$crate::misc::log(&format_args!($($t)*).to_string())}
     )
 }
 pub(crate) use console_log;
