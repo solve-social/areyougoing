@@ -98,7 +98,9 @@ impl ResultsUi {
                                 columns[0].cursor().top(),
                             ),
                             max: pos2(
-                                top_metric_rect.center().x + previous_heading_rect.width() / 2.0,
+                                top_metric_rect.center().x
+                                    + previous_heading_rect.width() / 2.0
+                                    + 1.0,
                                 f32::INFINITY,
                             ),
                         },
