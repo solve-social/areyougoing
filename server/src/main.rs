@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fs,
     net::SocketAddr,
+    path::PathBuf,
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -25,6 +26,7 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use axum_server::tls_rustls::RustlsConfig;
 
 #[tokio::main]
 async fn main() {
@@ -66,13 +68,27 @@ async fn main() {
         .layer(Extension(config))
         .layer(Extension(Arc::new(Mutex::new(db))));
 
+    // configure certificate and private key used by https
+    let tls_config = RustlsConfig::from_pem_file(
+        PathBuf::from("/etc/letsencrypt/live/areyougoingserver.solve.social/fullchain.pem"),
+        PathBuf::from("/etc/letsencrypt/live/areyougoingserver.solve.social/privkey.pem"),
+    )
+    .await
+    .unwrap();
+
     // let addr = SocketAddr::from(([127, 0, 0, 1], 3000)); // for offline use
-    let addr = SocketAddr::from((local_ip().expect("Failed to get local ip address"), 3000));
-    println!("Listening on http://{addr}");
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+    // let addr = SocketAddr::from((local_ip().expect("Failed to get local ip address"), 3000));
+    let addr = SocketAddr::from((local_ip().expect("Failed to get local ip address"), 443));
+    // println!("Listening on http://{addr}");
+    println!("Listening on https://{addr}");
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(app.into_make_service())
         .await
         .unwrap();
+    // axum::Server::bind(&addr)
+    //     .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+    //     .await
+    //     .unwrap();
 }
 
 async fn submit(
@@ -214,6 +230,8 @@ impl Db {
         if let Ok(string) = fs::read_to_string(DB_PATH) {
             if let Ok(db) = ron::de::from_str(&string) {
                 return Some(db);
+            } else {
+                panic!("Failed to parse the data file that was found!");
             }
         }
         None
