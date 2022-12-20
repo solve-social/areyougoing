@@ -273,7 +273,7 @@ impl UiExt for Ui {
     }
 
     fn indicate_loading(&mut self, last_time: &Option<Instant>) {
-        let mut ui = self.child_ui(self.ctx().available_rect(), Layout::bottom_up(Align::Max));
+        let mut ui = self.child_ui(self.ctx().available_rect(), Layout::bottom_up(Align::Min));
         if let Some(last_time) = last_time {
             ui.label(
                 RichText::new(last_time.elapsed().as_secs().to_string())
