@@ -1,5 +1,5 @@
 use crate::{
-    misc::{console_log, Submitter, UiExt},
+    misc::{Submitter, UiExt},
     time::Instant,
 };
 use areyougoing_shared::{Poll, PollProgress, Progress, ProgressReportResult, Requirement};
@@ -60,7 +60,7 @@ impl ResultsUi {
     pub fn process(&mut self, ui: &mut Ui, poll: &mut Poll, key: u64) {
         if let Some(ref poll_progress) = self.poll_progress {
             let ui_width = ui.available_width();
-            const MIDDLE_CHANNEL_WIDTH: f32 = 45.0;
+            const MIDDLE_CHANNEL_WIDTH: f32 = 35.0;
             let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
             let left_right_col_width = available_width_each_side - ui.spacing().item_spacing.x;
 
@@ -118,6 +118,8 @@ impl ResultsUi {
                             size,
                             Layout::right_to_left(Align::Center),
                             |ui| {
+                                let style = ui.style_mut();
+                                style.spacing.item_spacing.x = 2.0;
                                 let mut progress_rect = None;
                                 if let Some(progress) = progress {
                                     if let Some(metric_rect) = self.ui_state.metric_rects.get(i) {
@@ -207,6 +209,8 @@ impl ResultsUi {
                             size,
                             Layout::left_to_right(Align::Center),
                             |ui| {
+                                let style = ui.style_mut();
+                                style.spacing.item_spacing.x = 2.0;
                                 if let Some(result) = self.ui_state.result_rects.get(i) {
                                     let rect = ui
                                         .available_rect_before_wrap()
