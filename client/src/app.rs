@@ -4,8 +4,8 @@ use crate::participation::ParticipationState;
 use crate::poll::PollState;
 use crate::retrieve::RetrievingState;
 
-use egui::Visuals;
 use egui::{panel::TopBottomSide, Align, CentralPanel, Layout, RichText, TopBottomPanel};
+use egui::{vec2, Frame, Stroke, TextStyle, Visuals};
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicBool;
@@ -172,7 +172,11 @@ impl eframe::App for App {
                     } else {
                         "Create Poll"
                     };
-                    if ui.small_button(create_poll_text).clicked() {
+                    if ui
+                        .small_button("➕")
+                        .on_hover_text(create_poll_text)
+                        .clicked()
+                    {
                         next_poll_state = Some(PollState::NewPoll {
                             state: NewPoll::Creating {
                                 ui_data: Default::default(),
@@ -196,11 +200,22 @@ impl eframe::App for App {
                         columns[1].with_layout(
                             Layout::top_down(Align::Min).with_cross_align(Align::Center),
                             |ui| {
-                                ui.label(RichText::new(format!("Welcome, {user}!")).strong());
+                                Frame::none()
+                                    .fill(ui.style().visuals.faint_bg_color)
+                                    .stroke(Stroke {
+                                        width: 1.2,
+                                        color: ui.style().visuals.window_stroke.color,
+                                    })
+                                    .rounding(ui.style().text_styles[&TextStyle::Body].size / 2.0)
+                                    .inner_margin(vec2(-10., 0.0))
+                                    .outer_margin(vec2(0.0, 0.0))
+                                    .show(ui, |ui| {
+                                        ui.label(RichText::new(format!("😶 {user}")).strong());
+                                    });
                             },
                         );
                         columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            if ui.small_button("Sign Out").clicked() {
+                            if ui.small_button("⬅").on_hover_text("Sign Out").clicked() {
                                 *participation_state = ParticipationState::SignIn;
                             }
                         });
