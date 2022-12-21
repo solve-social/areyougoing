@@ -77,7 +77,6 @@ impl PollState {
                 ui.heading(format!("{} (#{key})", poll.title));
                 ui.label(&poll.description);
                 results_ui.process(ui, poll, *key);
-                ui.separator();
                 participation_state.process(ui, sign_in_data, *key, poll, &mut results_ui.stale);
             }
             PollState::NotFound { key } => {

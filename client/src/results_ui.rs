@@ -5,7 +5,8 @@ use crate::{
 use areyougoing_shared::{Poll, PollProgress, Progress, ProgressReportResult, Requirement};
 use derivative::Derivative;
 use egui::{
-    pos2, vec2, Align, Color32, Frame, Label, Layout, Rect, RichText, Stroke, TextStyle, Ui,
+    pos2, vec2, Align, Color32, Frame, Label, Layout, Rect, RichText, ScrollArea, Stroke,
+    TextStyle, Ui,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -45,6 +46,7 @@ pub struct ResultsUiState {
     condition_rects: Vec<Rect>,
     metrics_heading_rect: Option<Rect>,
     results_heading_rect: Option<Rect>,
+    bottom: Option<f32>,
 }
 
 #[inline]
@@ -82,6 +84,7 @@ impl ResultsUi {
                     let mut size = columns[0].available_size();
                     size.y = 0.;
 
+                    let ui = &mut columns[0];
                     let heading_rect = match (
                         self.ui_state.metric_rects.first(),
                         self.ui_state.metrics_heading_rect,
@@ -89,7 +92,7 @@ impl ResultsUi {
                         (Some(top_metric_rect), Some(previous_heading_rect)) => Rect {
                             min: pos2(
                                 top_metric_rect.center().x - previous_heading_rect.width() / 2.0,
-                                columns[0].cursor().top(),
+                                ui.cursor().top(),
                             ),
                             max: pos2(
                                 top_metric_rect.center().x
@@ -98,77 +101,96 @@ impl ResultsUi {
                                 f32::INFINITY,
                             ),
                         },
-                        _ => columns[0].available_rect_before_wrap(),
+                        _ => ui.available_rect_before_wrap(),
                     };
-                    columns[0].allocate_ui_at_rect(heading_rect, |ui| {
+                    ui.allocate_ui_at_rect(heading_rect, |ui| {
                         ui.with_layout(Layout::top_down(Align::Center), |ui| {
                             let response = ui.label(RichText::new("Metrics").underline().strong());
                             self.ui_state.metrics_heading_rect = Some(response.rect);
                         });
                     });
 
-                    self.ui_state.progress_rects.clear();
-                    for (i, (metric_tracker, progress)) in poll
-                        .metric_trackers
-                        .iter()
-                        .zip(poll_progress.metric_progresses.iter())
-                        .enumerate()
-                    {
-                        columns[0].allocate_ui_with_layout(
-                            size,
-                            Layout::right_to_left(Align::Center),
-                            |ui| {
-                                let style = ui.style_mut();
-                                style.spacing.item_spacing.x = 2.0;
-                                let mut progress_rect = None;
-                                if let Some(progress) = progress {
-                                    if let Some(metric_rect) = self.ui_state.metric_rects.get(i) {
-                                        let rect = ui
-                                            .available_rect_before_wrap()
-                                            .translate(vec2(
-                                                0.,
-                                                metric_rect.height() / 2.
-                                                    - ui.text_style_height(&TextStyle::Body) / 2.,
-                                            ))
-                                            .expand2(vec2(0.0, results_frame.stroke.width));
-                                        ui.allocate_ui_at_rect(rect, |ui| {
-                                            let response = results_frame.show(ui, |ui| {
-                                                ui.label(match progress {
-                                                    Progress::Count(count) => count.to_string(),
-                                                });
-                                            });
-                                            progress_rect = Some(response.response.rect);
-                                        });
-                                    }
-                                }
+                    let scroll_max_height = ui.available_height() / 2.0;
 
-                                let metric_rect = results_frame
-                                    .show(ui, |ui| {
-                                        ui.add(
-                                            Label::new(
-                                                metric_tracker.metric.render(&poll.questions),
-                                            )
-                                            .wrap(true),
-                                        )
-                                    })
-                                    .response
-                                    .rect;
-                                self.ui_state.progress_rects.push(
-                                    if let Some(progress_rect) = progress_rect {
-                                        progress_rect
-                                    } else {
-                                        metric_rect
+                    ui.add_space(2.0);
+                    self.ui_state.progress_rects.clear();
+                    ScrollArea::vertical()
+                        .id_source("metrics_scroll")
+                        .max_height(scroll_max_height)
+                        .show(ui, |ui| {
+                            for (i, (metric_tracker, progress)) in poll
+                                .metric_trackers
+                                .iter()
+                                .zip(poll_progress.metric_progresses.iter())
+                                .enumerate()
+                            {
+                                ui.allocate_ui_with_layout(
+                                    size,
+                                    Layout::right_to_left(Align::Center),
+                                    |ui| {
+                                        let style = ui.style_mut();
+                                        style.spacing.item_spacing.x = 2.0;
+                                        let mut progress_rect = None;
+                                        if let Some(progress) = progress {
+                                            if let Some(metric_rect) =
+                                                self.ui_state.metric_rects.get(i)
+                                            {
+                                                let rect = ui
+                                                    .available_rect_before_wrap()
+                                                    .translate(vec2(
+                                                        0.,
+                                                        metric_rect.height() / 2.
+                                                            - ui.text_style_height(
+                                                                &TextStyle::Body,
+                                                            ) / 2.,
+                                                    ))
+                                                    .expand2(vec2(0.0, results_frame.stroke.width));
+                                                ui.allocate_ui_at_rect(rect, |ui| {
+                                                    let response = results_frame.show(ui, |ui| {
+                                                        ui.label(match progress {
+                                                            Progress::Count(count) => {
+                                                                count.to_string()
+                                                            }
+                                                        });
+                                                    });
+                                                    progress_rect = Some(response.response.rect);
+                                                });
+                                            }
+                                        }
+
+                                        let metric_rect = results_frame
+                                            .show(ui, |ui| {
+                                                ui.add(
+                                                    Label::new(
+                                                        metric_tracker
+                                                            .metric
+                                                            .render(&poll.questions),
+                                                    )
+                                                    .wrap(true),
+                                                )
+                                            })
+                                            .response
+                                            .rect;
+                                        self.ui_state.progress_rects.push(
+                                            if let Some(progress_rect) = progress_rect {
+                                                progress_rect
+                                            } else {
+                                                metric_rect
+                                            },
+                                        );
+                                        if let Some(old_rect) =
+                                            self.ui_state.metric_rects.get_mut(i)
+                                        {
+                                            *old_rect = metric_rect
+                                        } else {
+                                            self.ui_state.metric_rects.push(metric_rect);
+                                        }
                                     },
                                 );
-                                if let Some(old_rect) = self.ui_state.metric_rects.get_mut(i) {
-                                    *old_rect = metric_rect
-                                } else {
-                                    self.ui_state.metric_rects.push(metric_rect);
-                                }
-                            },
-                        );
-                    }
+                            }
+                        });
 
+                    let ui = &mut columns[2];
                     let heading_rect = match (
                         self.ui_state.result_rects.first(),
                         self.ui_state.results_heading_rect,
@@ -176,7 +198,7 @@ impl ResultsUi {
                         (Some(top_metric_rect), Some(previous_heading_rect)) => Rect {
                             min: pos2(
                                 top_metric_rect.center().x - previous_heading_rect.width() / 2.0,
-                                columns[2].cursor().top(),
+                                ui.cursor().top(),
                             ),
                             max: pos2(
                                 top_metric_rect.center().x
@@ -185,94 +207,122 @@ impl ResultsUi {
                                 f32::INFINITY,
                             ),
                         },
-                        _ => columns[2].available_rect_before_wrap(),
+                        _ => ui.available_rect_before_wrap(),
                     };
-                    columns[2].allocate_ui_at_rect(heading_rect, |ui| {
+                    ui.allocate_ui_at_rect(heading_rect, |ui| {
                         ui.with_layout(Layout::top_down(Align::Center), |ui| {
                             let response = ui.label(RichText::new("Results").underline().strong());
                             self.ui_state.results_heading_rect = Some(response.rect);
                         });
                     });
 
+                    ui.add_space(2.0);
                     self.ui_state.condition_rects.clear();
-                    for (i, (poll_result, result_state)) in poll
-                        .results
-                        .iter()
-                        .zip(poll_progress.result_states.iter())
-                        .enumerate()
-                    {
-                        let results_frame =
-                            results_frame.fill(choose_color(result_state.overall_met));
-                        let mut size = columns[2].available_size();
-                        size.y = 0.;
-                        columns[2].allocate_ui_with_layout(
-                            size,
-                            Layout::left_to_right(Align::Center),
-                            |ui| {
-                                let style = ui.style_mut();
-                                style.spacing.item_spacing.x = 2.0;
-                                if let Some(result) = self.ui_state.result_rects.get(i) {
-                                    let rect = ui
-                                        .available_rect_before_wrap()
-                                        .translate(vec2(
-                                            0.,
-                                            result.height() / 2.
-                                                - ui.text_style_height(&TextStyle::Body) / 2.,
-                                        ))
-                                        .expand2(vec2(0.0, results_frame.stroke.width));
-                                    ui.allocate_ui_at_rect(rect, |ui| {
-                                        let response = results_frame.show(ui, |ui| {
-                                            ui.colored_label(
-                                                ui.style().visuals.strong_text_color(),
-                                                match poll_result.requirements[0] {
-                                                    Requirement::AtLeast { minimum, .. } => {
-                                                        format!("≥{minimum}")
-                                                    }
-                                                },
-                                            );
-                                        });
-                                        self.ui_state.condition_rects.push(response.response.rect);
-                                    });
-                                }
+                    ScrollArea::vertical()
+                        .id_source("results_scroll")
+                        .max_height(scroll_max_height)
+                        .show(ui, |ui| {
+                            for (i, (poll_result, result_state)) in poll
+                                .results
+                                .iter()
+                                .zip(poll_progress.result_states.iter())
+                                .enumerate()
+                            {
+                                let results_frame =
+                                    results_frame.fill(choose_color(result_state.overall_met));
+                                let mut size = ui.available_size();
+                                size.y = 0.;
+                                ui.allocate_ui_with_layout(
+                                    size,
+                                    Layout::left_to_right(Align::Center),
+                                    |ui| {
+                                        let style = ui.style_mut();
+                                        style.spacing.item_spacing.x = 2.0;
+                                        if let Some(result) = self.ui_state.result_rects.get(i) {
+                                            let rect = ui
+                                                .available_rect_before_wrap()
+                                                .translate(vec2(
+                                                    0.,
+                                                    result.height() / 2.
+                                                        - ui.text_style_height(&TextStyle::Body)
+                                                            / 2.,
+                                                ))
+                                                .expand2(vec2(0.0, results_frame.stroke.width));
+                                            ui.allocate_ui_at_rect(rect, |ui| {
+                                                let response = results_frame.show(ui, |ui| {
+                                                    ui.colored_label(
+                                                        ui.style().visuals.strong_text_color(),
+                                                        match poll_result.requirements[0] {
+                                                            Requirement::AtLeast {
+                                                                minimum,
+                                                                ..
+                                                            } => {
+                                                                format!("≥{minimum}")
+                                                            }
+                                                        },
+                                                    );
+                                                });
+                                                self.ui_state
+                                                    .condition_rects
+                                                    .push(response.response.rect);
+                                            });
+                                        }
 
-                                let rect = results_frame
-                                    .show(ui, |ui| {
-                                        ui.add(
-                                            Label::new(RichText::new(&poll_result.desc).strong())
-                                                .wrap(true),
-                                        )
-                                    })
-                                    .response
-                                    .rect;
-                                if let Some(old_rect) = self.ui_state.result_rects.get_mut(i) {
-                                    *old_rect = rect
-                                } else {
-                                    self.ui_state.result_rects.push(rect);
-                                }
-                            },
+                                        let rect = results_frame
+                                            .show(ui, |ui| {
+                                                ui.add(
+                                                    Label::new(
+                                                        RichText::new(&poll_result.desc).strong(),
+                                                    )
+                                                    .wrap(true),
+                                                )
+                                            })
+                                            .response
+                                            .rect;
+                                        if let Some(old_rect) =
+                                            self.ui_state.result_rects.get_mut(i)
+                                        {
+                                            *old_rect = rect
+                                        } else {
+                                            self.ui_state.result_rects.push(rect);
+                                        }
+                                    },
+                                );
+                            }
+                        });
+
+                    let ui = &mut columns[1];
+                    let mut arrows_rect = ui
+                        .available_rect_before_wrap()
+                        .expand2(ui.spacing().item_spacing);
+                    arrows_rect.set_top(self.ui_state.results_heading_rect.unwrap().bottom());
+                    if let Some(bottom) = self.ui_state.bottom {
+                        arrows_rect.set_bottom(bottom);
+                    }
+                    ui.set_clip_rect(arrows_rect);
+                    for (left_rect, (right_rect, result_state)) in
+                        self.ui_state.progress_rects.iter().zip(
+                            self.ui_state
+                                .condition_rects
+                                .iter()
+                                .zip(poll_progress.result_states.iter()),
+                        )
+                    {
+                        const MARGIN: f32 = 3.0;
+                        let mut left = left_rect.right_center();
+                        let mut right = right_rect.left_center();
+                        left.x += MARGIN;
+                        right.x -= MARGIN;
+                        let vector = right - left;
+                        ui.painter().arrow(
+                            left,
+                            vector,
+                            Stroke::new(3.0, choose_color(result_state.overall_met)),
                         );
                     }
                 },
             );
-
-            for (left_rect, (right_rect, result_state)) in self.ui_state.progress_rects.iter().zip(
-                self.ui_state
-                    .condition_rects
-                    .iter()
-                    .zip(poll_progress.result_states.iter()),
-            ) {
-                const MARGIN: f32 = 3.0;
-                let mut left = left_rect.right_center();
-                let mut right = right_rect.left_center();
-                left.x += MARGIN;
-                right.x -= MARGIN;
-                let vector = right - left;
-                ui.painter().arrow(
-                    left,
-                    vector,
-                    Stroke::new(3.0, choose_color(result_state.overall_met)),
-                );
-            }
+            self.ui_state.bottom = Some(ui.separator().rect.top());
         } else {
             ui.spinner();
         }
