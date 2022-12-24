@@ -85,9 +85,12 @@ impl NewPoll {
                         |ui| {
                             for tab in all::<UiTab>() {
                                 ui.add_enabled_ui(*ui_tab != tab, |ui| {
-                                    let mut button =
-                                        Button::new(format!("{tab:?}").split(':').last().unwrap())
-                                            .small();
+                                    let mut button = Button::new(
+                                        RichText::new(
+                                            format!("{tab:?}").split(':').last().unwrap(),
+                                        )
+                                        .font(FontId::proportional(17.)),
+                                    );
                                     if *ui_tab == tab {
                                         button = button.fill(ui.style().visuals.selection.bg_fill);
                                     }
