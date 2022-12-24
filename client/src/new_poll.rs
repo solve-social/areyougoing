@@ -126,6 +126,7 @@ impl NewPoll {
                             });
                         }
                     });
+                ui.ctx().request_repaint_after(Duration::from_millis(300));
             }
             NewPoll::Submitting {
                 poll,
