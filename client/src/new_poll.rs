@@ -4,8 +4,8 @@ use areyougoing_shared::{
 };
 use derivative::Derivative;
 use egui::{
-    pos2, Align, Button, Color32, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea,
-    TextEdit, Ui, Vec2,
+    pos2, Align, Button, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea, TextEdit, Ui,
+    Vec2,
 };
 use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
