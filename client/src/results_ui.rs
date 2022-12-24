@@ -149,14 +149,11 @@ impl ResultsUi {
                                                     .expand2(vec2(0.0, results_frame.stroke.width));
                                                 ui.allocate_ui_at_rect(rect, |ui| {
                                                     let response = results_frame.show(ui, |ui| {
-                                                        ui.label(
-                                                            RichText::new(match progress {
-                                                                Progress::Count(count) => {
-                                                                    count.to_string()
-                                                                }
-                                                            })
-                                                            .small(),
-                                                        );
+                                                        ui.label(RichText::new(match progress {
+                                                            Progress::Count(count) => {
+                                                                count.to_string()
+                                                            }
+                                                        }));
                                                     });
                                                     progress_rect = Some(response.response.rect);
                                                 });
@@ -166,14 +163,11 @@ impl ResultsUi {
                                         let metric_rect = results_frame
                                             .show(ui, |ui| {
                                                 ui.add(
-                                                    Label::new(
-                                                        RichText::new(
-                                                            metric_tracker
-                                                                .metric
-                                                                .render(&poll.questions),
-                                                        )
-                                                        .small(),
-                                                    )
+                                                    Label::new(RichText::new(
+                                                        metric_tracker
+                                                            .metric
+                                                            .render(&poll.questions),
+                                                    ))
                                                     .wrap(true),
                                                 )
                                             })
@@ -269,8 +263,7 @@ impl ResultsUi {
                                                                     format!("≥{minimum}")
                                                                 }
                                                             },
-                                                        )
-                                                        .small(),
+                                                        ),
                                                     );
                                                 });
                                                 self.ui_state
@@ -283,9 +276,7 @@ impl ResultsUi {
                                             .show(ui, |ui| {
                                                 ui.add(
                                                     Label::new(
-                                                        RichText::new(&poll_result.desc)
-                                                            .strong()
-                                                            .small(),
+                                                        RichText::new(&poll_result.desc).strong(),
                                                     )
                                                     .wrap(true),
                                                 )
