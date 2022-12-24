@@ -314,9 +314,8 @@ impl ResultsUi {
                         left.x += MARGIN;
                         right.x -= MARGIN;
                         let vector = right - left;
-                        ui.painter().arrow(
-                            left,
-                            vector,
+                        ui.painter().line_segment(
+                            [left, left + vector],
                             Stroke::new(3.0, choose_color(result_state.overall_met)),
                         );
                     }
