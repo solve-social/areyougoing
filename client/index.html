@@ -66,7 +66,8 @@
             margin-left: auto;
             display: block;
             position: absolute;
-            top: 0%;
+            /* "!important" is due to https://github.com/emilk/egui/issues/2231#issuecomment-1302897979 */
+            top: 0% !important;
             left: 50%;
             transform: translate(-50%, 0%);
         }
