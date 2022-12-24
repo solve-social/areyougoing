@@ -62,7 +62,7 @@ impl ResultsUi {
     pub fn process(&mut self, ui: &mut Ui, poll: &mut Poll, key: u64) {
         if let Some(ref poll_progress) = self.poll_progress {
             let ui_width = ui.available_width();
-            const MIDDLE_CHANNEL_WIDTH: f32 = 35.0;
+            const MIDDLE_CHANNEL_WIDTH: f32 = 30.0;
             let available_width_each_side = (ui_width - MIDDLE_CHANNEL_WIDTH) / 2.0;
             let left_right_col_width = available_width_each_side - ui.spacing().item_spacing.x;
 
@@ -110,7 +110,7 @@ impl ResultsUi {
                         });
                     });
 
-                    let scroll_max_height = ui.available_height() / 2.0;
+                    let scroll_max_height = ui.available_height() / 3.0;
 
                     ui.add_space(2.0);
                     self.ui_state.progress_rects.clear();
@@ -147,11 +147,14 @@ impl ResultsUi {
                                                     .expand2(vec2(0.0, results_frame.stroke.width));
                                                 ui.allocate_ui_at_rect(rect, |ui| {
                                                     let response = results_frame.show(ui, |ui| {
-                                                        ui.label(match progress {
-                                                            Progress::Count(count) => {
-                                                                count.to_string()
-                                                            }
-                                                        });
+                                                        ui.label(
+                                                            RichText::new(match progress {
+                                                                Progress::Count(count) => {
+                                                                    count.to_string()
+                                                                }
+                                                            })
+                                                            .small(),
+                                                        );
                                                     });
                                                     progress_rect = Some(response.response.rect);
                                                 });
@@ -162,9 +165,12 @@ impl ResultsUi {
                                             .show(ui, |ui| {
                                                 ui.add(
                                                     Label::new(
-                                                        metric_tracker
-                                                            .metric
-                                                            .render(&poll.questions),
+                                                        RichText::new(
+                                                            metric_tracker
+                                                                .metric
+                                                                .render(&poll.questions),
+                                                        )
+                                                        .small(),
                                                     )
                                                     .wrap(true),
                                                 )
@@ -252,14 +258,17 @@ impl ResultsUi {
                                                 let response = results_frame.show(ui, |ui| {
                                                     ui.colored_label(
                                                         ui.style().visuals.strong_text_color(),
-                                                        match poll_result.requirements[0] {
-                                                            Requirement::AtLeast {
-                                                                minimum,
-                                                                ..
-                                                            } => {
-                                                                format!("≥{minimum}")
-                                                            }
-                                                        },
+                                                        RichText::new(
+                                                            match poll_result.requirements[0] {
+                                                                Requirement::AtLeast {
+                                                                    minimum,
+                                                                    ..
+                                                                } => {
+                                                                    format!("≥{minimum}")
+                                                                }
+                                                            },
+                                                        )
+                                                        .small(),
                                                     );
                                                 });
                                                 self.ui_state
@@ -272,7 +281,9 @@ impl ResultsUi {
                                             .show(ui, |ui| {
                                                 ui.add(
                                                     Label::new(
-                                                        RichText::new(&poll_result.desc).strong(),
+                                                        RichText::new(&poll_result.desc)
+                                                            .strong()
+                                                            .small(),
                                                     )
                                                     .wrap(true),
                                                 )
