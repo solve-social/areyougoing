@@ -112,7 +112,9 @@ impl ResultsUi {
 
                     let scroll_max_height = ui.available_height() / 3.0;
 
-                    ui.add_space(2.0);
+                    const UNDERHEADING_SPACE: f32 = 2.0;
+
+                    ui.add_space(UNDERHEADING_SPACE);
                     self.ui_state.progress_rects.clear();
                     ScrollArea::vertical()
                         .id_source("metrics_scroll")
@@ -222,7 +224,7 @@ impl ResultsUi {
                         });
                     });
 
-                    ui.add_space(2.0);
+                    ui.add_space(UNDERHEADING_SPACE);
                     self.ui_state.condition_rects.clear();
                     ScrollArea::vertical()
                         .id_source("results_scroll")
