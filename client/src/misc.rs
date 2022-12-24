@@ -260,7 +260,14 @@ impl UiExt for Ui {
         let total_required_width = total_spacing + max_column_widths.iter().sum::<f32>();
 
         let size = vec2(self.available_width().max(total_required_width), max_height);
-        self.allocate_rect(Rect::from_min_size(top_left, size), Sense::drag());
+        self.allocate_rect(
+            Rect::from_min_size(top_left, size),
+            Sense {
+                click: false,
+                drag: false,
+                focusable: false,
+            },
+        );
         // self.advance_cursor_after_rect(Rect::from_min_size(top_left, size));
         result
     }
