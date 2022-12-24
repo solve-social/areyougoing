@@ -3,7 +3,10 @@ use areyougoing_shared::{
     CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Question, Requirement,
 };
 use derivative::Derivative;
-use egui::{pos2, Align, Button, ComboBox, Layout, Pos2, Rect, ScrollArea, TextEdit, Ui, Vec2};
+use egui::{
+    pos2, Align, Button, Color32, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea,
+    TextEdit, Ui, Vec2,
+};
 use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
