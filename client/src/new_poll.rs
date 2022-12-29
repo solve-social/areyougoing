@@ -4,8 +4,8 @@ use areyougoing_shared::{
 };
 use derivative::Derivative;
 use egui::{
-    pos2, Align, Button, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea, TextEdit, Ui,
-    Vec2,
+    pos2, vec2, Align, Button, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea,
+    TextEdit, Ui, Vec2,
 };
 use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
@@ -251,9 +251,10 @@ impl NewPoll {
 
                 match &mut question.form {
                     Form::ChooseOneorNone { ref mut options } => {
-                        ArrangeableList::new(options, "Option").min_items(1).show(
-                            ui,
-                            |list_state, ui, option| {
+                        ArrangeableList::new(options, "Option")
+                            .min_items(1)
+                            .item_spacing(vec2(3., 1.))
+                            .show(ui, |list_state, ui, option| {
                                 ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
                                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                         list_state.show_controls(ui);
@@ -263,8 +264,7 @@ impl NewPoll {
                                         )));
                                     });
                                 });
-                            },
-                        );
+                            });
                     }
                 }
             });

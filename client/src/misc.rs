@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use egui::{pos2, vec2, Align, Layout, NumExt, Rect, RichText, Sense, Ui};
+use egui::{pos2, vec2, Align, Layout, NumExt, Rect, RichText, Sense, Ui, Vec2};
 use futures_lite::{future, Future};
 use gloo::events::EventListener;
 use gloo::{console::__macro::JsValue, net::http::RequestMode};
@@ -289,13 +289,11 @@ impl UiExt for Ui {
 
 pub struct ArrangeableList<'a, T> {
     items: &'a mut Vec<T>,
-    min_items: usize,
-    num_items: usize,
-    item_description: String,
+    inner: ArrangeableListInner,
 }
 
 #[derive(Default)]
-pub struct ArrangeableListState {
+pub struct ArrangeableListInner {
     num_items: usize,
     pub current_index: usize,
     min_items: usize,
@@ -303,13 +301,16 @@ pub struct ArrangeableListState {
     delete_index: Option<usize>,
     swap_indices: Option<(usize, usize)>,
     item_description: String,
+    item_spacing: Option<Vec2>,
 }
 
-impl ArrangeableListState {
+impl ArrangeableListInner {
     pub fn show_controls(&mut self, ui: &mut Ui) {
         let spacing = ui.spacing().clone();
         ui.spacing_mut().button_padding = vec2(0., 0.);
-        ui.spacing_mut().item_spacing = vec2(3., 1.);
+        if let Some(spacing) = self.item_spacing {
+            ui.spacing_mut().item_spacing = spacing;
+        }
 
         ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
             if ui
@@ -357,44 +358,45 @@ where
 {
     pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self {
         Self {
-            num_items: items.len(),
+            inner: ArrangeableListInner {
+                num_items: items.len(),
+                item_description: item_description.to_string(),
+                ..Default::default()
+            },
             items,
-            item_description: item_description.to_string(),
-            min_items: 0,
         }
     }
 
     pub fn min_items(mut self, min_items: usize) -> Self {
-        self.min_items = min_items;
+        self.inner.min_items = min_items;
+        self
+    }
+
+    pub fn item_spacing(mut self, item_spacing: Vec2) -> Self {
+        self.inner.item_spacing = Some(item_spacing);
         self
     }
 
     pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F)
     where
-        F: FnMut(&mut ArrangeableListState, &mut Ui, &mut T),
+        F: FnMut(&mut ArrangeableListInner, &mut Ui, &mut T),
     {
-        let mut state = ArrangeableListState {
-            num_items: self.num_items,
-            min_items: self.min_items,
-            item_description: self.item_description.clone(),
-            ..Default::default()
-        };
         for (item_i, item) in self.items.iter_mut().enumerate() {
-            state.current_index = item_i;
-            add_contents(&mut state, ui, item);
+            self.inner.current_index = item_i;
+            add_contents(&mut self.inner, ui, item);
         }
-        if let Some(index) = state.delete_index {
+        if let Some(index) = self.inner.delete_index {
             self.items.remove(index);
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
-        if self.items.len() < self.min_items {
-            state.new_index = Some(self.items.len());
+        if self.items.len() < self.inner.min_items {
+            self.inner.new_index = Some(self.items.len());
         }
-        if let Some(index) = state.new_index {
+        if let Some(index) = self.inner.new_index {
             self.items.insert(index, T::default());
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
-        if let Some((a, b)) = state.swap_indices {
+        if let Some((a, b)) = self.inner.swap_indices {
             self.items.swap(a, b);
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
