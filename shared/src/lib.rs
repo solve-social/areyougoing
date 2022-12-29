@@ -143,6 +143,18 @@ pub struct PollResult2 {
     pub requirements: Vec<Requirement>,
 }
 
+impl Default for PollResult2 {
+    fn default() -> Self {
+        Self {
+            desc: "".to_string(),
+            requirements: vec![Requirement::AtLeast {
+                metric_index: 0,
+                minimum: 1,
+            }],
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct ResultState {
     pub requirements_met: Vec<bool>,
