@@ -95,8 +95,9 @@ impl ParticipationState {
                                                 );
                                             }
                                             let response = ui.add(button);
-                                            if !selected && response.clicked() {
-                                                *choice = Some(i as u8);
+                                            if response.clicked() {
+                                                *choice =
+                                                    if selected { None } else { Some(i as u8) };
                                             }
                                         }
                                     }
