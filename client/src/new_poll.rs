@@ -71,7 +71,19 @@ impl NewPoll {
                 }
                 ui_data.available_rect = Some(ui.available_rect_before_wrap());
 
-                ui.heading("Create a new poll!");
+                let effective_title = match (&poll.title, &poll.questions[0].prompt) {
+                    (main_title, _) if !main_title.is_empty() => Some(main_title),
+                    (_, first_prompt) if !first_prompt.is_empty() => Some(first_prompt),
+                    _ => None,
+                };
+                ui.heading(format!(
+                    "New Poll{}",
+                    if let Some(title) = effective_title {
+                        format!(": {title}")
+                    } else {
+                        "".to_string()
+                    }
+                ));
 
                 if ui_data.advanced_mode {
                     let tabs_rect = if let Some(rect) = ui_data.tabs_rect {
@@ -110,9 +122,9 @@ impl NewPoll {
                         ui_data.tabs_rect =
                             Some(response.response.rect.shrink2(ui.spacing().item_spacing));
                     });
-                }
 
-                ui.separator();
+                    ui.separator();
+                }
 
                 ScrollArea::vertical()
                     .id_source("create_poll_scroll")
@@ -130,7 +142,7 @@ impl NewPoll {
                                 }
                             }
                         } else {
-                            //
+                            Self::show_integrated_form(ui, poll, ui_data);
                         }
                         ui.separator();
                         if ui.button("SUBMIT").clicked() {
@@ -186,8 +198,176 @@ impl NewPoll {
         }
     }
 
+    fn show_integrated_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
+        let mut new_question_index = None;
+        let mut delete_i = None;
+        let mut swap_indices = None;
+
+        let num_questions = poll.questions.len();
+        for (question_i, question) in poll.questions.iter_mut().enumerate() {
+            let response = ui.group(|ui| {
+                let label_response = ui.label(format!("Question {}", question_i + 1));
+
+                if let Some(fields_rect) = ui_data.fields_rect {
+                    let question_controls_rect = Rect {
+                        min: Pos2 {
+                            x: label_response.rect.right(),
+                            y: label_response.rect.top(),
+                        },
+                        max: Pos2 {
+                            x: fields_rect.right(),
+                            y: label_response.rect.bottom(),
+                        },
+                    };
+                    ui.allocate_ui_at_rect(question_controls_rect, |ui| {
+                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            ui.spacing_mut().button_padding = Vec2 { x: 0., y: 0.0 };
+                            ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
+
+                            ui.add_enabled_ui(num_questions > 1, |ui| {
+                                if ui
+                                    .small_button("🗑")
+                                    .on_hover_text("Delete question")
+                                    .clicked()
+                                {
+                                    delete_i = Some(question_i);
+                                }
+                            });
+                            ui.add_enabled_ui(question_i < num_questions - 1, |ui| {
+                                if ui
+                                    .small_button("⬇")
+                                    .on_hover_text("Move question down")
+                                    .clicked()
+                                {
+                                    swap_indices = Some((question_i, question_i + 1));
+                                }
+                            });
+                            ui.add_enabled_ui(question_i != 0, |ui| {
+                                if ui
+                                    .small_button("⬆")
+                                    .on_hover_text("Move question up")
+                                    .clicked()
+                                {
+                                    swap_indices = Some((question_i, question_i - 1));
+                                }
+                            });
+                        });
+                    });
+                }
+                let response = ui.add(
+                    TextEdit::multiline(&mut question.prompt)
+                        .desired_rows(1)
+                        .hint_text("Prompt"),
+                );
+                ui_data.fields_rect = Some(response.rect);
+                ui.separator();
+
+                match &mut question.form {
+                    Form::ChooseOneorNone { ref mut options } => {
+                        let mut new_option_index = None;
+                        let mut delete_i = None;
+                        let mut swap_indices = None;
+                        let num_options = options.len();
+                        for (option_i, option) in options.iter_mut().enumerate() {
+                            ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    ui.spacing_mut().button_padding = Vec2 { x: 0., y: 0.0 };
+                                    ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 1.0 };
+
+                                    ui.add_enabled_ui(num_options > 1, |ui| {
+                                        if ui
+                                            .small_button("🗑")
+                                            .on_hover_text("Delete option")
+                                            .clicked()
+                                        {
+                                            delete_i = Some(option_i);
+                                        }
+                                    });
+
+                                    ui.add_enabled_ui(option_i < num_options - 1, |ui| {
+                                        if ui
+                                            .small_button("⬇")
+                                            .on_hover_text("Move option down")
+                                            .clicked()
+                                        {
+                                            swap_indices = Some((option_i, option_i + 1));
+                                        }
+                                    });
+                                    ui.add_enabled_ui(option_i != 0, |ui| {
+                                        if ui
+                                            .small_button("⬆")
+                                            .on_hover_text("Move option up")
+                                            .clicked()
+                                        {
+                                            swap_indices = Some((option_i, option_i - 1));
+                                        }
+                                    });
+                                    if ui
+                                        .small_button("➕")
+                                        .on_hover_text("Insert option after this one")
+                                        .clicked()
+                                    {
+                                        new_option_index = Some(option_i + 1);
+                                    }
+                                    ui.add(
+                                        TextEdit::singleline(option)
+                                            .hint_text(format!("Option {}", option_i + 1)),
+                                    );
+                                });
+                            });
+                        }
+                        if let Some(index) = delete_i {
+                            options.remove(index);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
+                        }
+                        if options.is_empty() {
+                            new_option_index = Some(0);
+                        }
+                        if let Some(index) = new_option_index {
+                            options.insert(index, "".to_string());
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
+                        }
+                        if let Some((a, b)) = swap_indices {
+                            options.swap(a, b);
+                            ui.ctx().request_repaint_after(Duration::from_millis(100));
+                        }
+                    }
+                }
+            });
+            if question_i == 0 {
+                ui_data.question_group_rect = Some(response.response.rect);
+            }
+            if ui.small_button("Add Question").clicked() {
+                new_question_index = Some(question_i + 1);
+            }
+        }
+        if let Some(index) = delete_i {
+            poll.questions.remove(index);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        if let Some((a, b)) = swap_indices {
+            poll.questions.swap(a, b);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        if poll.questions.is_empty() {
+            new_question_index = Some(0);
+        }
+        if let Some(index) = new_question_index {
+            poll.questions.insert(
+                index,
+                Question {
+                    prompt: "".to_string(),
+                    form: Form::ChooseOneorNone {
+                        options: Vec::new(),
+                    },
+                },
+            );
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
     fn show_main_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
-        ui.add(TextEdit::singleline(&mut poll.title).hint_text("Title"));
+        ui.add(TextEdit::singleline(&mut poll.title).hint_text("Title (Optional)"));
         ui.add(
             TextEdit::multiline(&mut poll.description)
                 .hint_text("Description (Optional)")
