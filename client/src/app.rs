@@ -207,7 +207,7 @@ impl eframe::App for App {
                                         color: ui.style().visuals.window_stroke.color,
                                     })
                                     .rounding(ui.style().text_styles[&TextStyle::Body].size / 2.0)
-                                    .inner_margin(vec2(-10., 0.0))
+                                    .inner_margin(vec2(0., 0.0))
                                     .outer_margin(vec2(0.0, 0.0))
                                     .show(ui, |ui| {
                                         ui.label(RichText::new(format!("😶 {user}")).strong());
