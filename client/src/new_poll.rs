@@ -249,7 +249,6 @@ impl NewPoll {
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
         ArrangeableList::new(&mut poll.metric_trackers, "Metric")
-            .min_items(1)
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, metric_tracker| {
                 let response =
