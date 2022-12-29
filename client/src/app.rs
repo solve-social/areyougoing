@@ -221,6 +221,26 @@ impl eframe::App for App {
                         });
                     }
                 }
+
+                if let PollState::NewPoll {
+                    state: NewPoll::Creating { ui_data, .. },
+                    ..
+                } = &mut self.poll_state
+                {
+                    columns[2].with_layout(Layout::right_to_left(Align::Min), |ui| {
+                        if ui
+                            .small_button(if ui_data.advanced_mode { "⭕" } else { "" })
+                            .on_hover_text(if ui_data.advanced_mode {
+                                "Simple Editer"
+                            } else {
+                                "Advanced Editor"
+                            })
+                            .clicked()
+                        {
+                            ui_data.advanced_mode = !ui_data.advanced_mode;
+                        }
+                    });
+                }
             });
         });
 

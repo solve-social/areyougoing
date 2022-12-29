@@ -39,6 +39,7 @@ pub struct CreatingUiData {
     available_rect: Option<Rect>,
     group_border_thickness: Option<f32>,
     tabs_rect: Option<Rect>,
+    pub advanced_mode: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Sequence)]
