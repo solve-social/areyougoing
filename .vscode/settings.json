@@ -3,5 +3,7 @@
         "--target-dir",
         "${workspaceFolder}/target/check"
     ],
-    "rust-analyzer.checkOnSave.command": "clippy"
+    "rust-analyzer.checkOnSave.command": "clippy",
+    "editor.formatOnSave": true,
+    "files.trimTrailingWhitespace": true
 }
