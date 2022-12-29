@@ -110,8 +110,6 @@ impl NewPoll {
                         ui_data.tabs_rect =
                             Some(response.response.rect.shrink2(ui.spacing().item_spacing));
                     });
-                } else {
-                    //
                 }
 
                 ui.separator();
