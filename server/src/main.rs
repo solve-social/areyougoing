@@ -8,7 +8,7 @@ use std::{
 
 use areyougoing_shared::{
     CreatePollResult, Form, FormResponse, Metric, MetricTracker, Poll, PollProgress,
-    PollQueryResult, PollResponse, PollResult2, PollStatus, PollSubmissionResult, Progress,
+    PollQueryResult, PollResponse, PollResult, PollStatus, PollSubmissionResult, Progress,
     ProgressReportResult, Question, Requirement, ResultState,
 };
 use axum::{
@@ -18,6 +18,7 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use local_ip_address::local_ip;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
@@ -26,7 +27,6 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
-use axum_server::tls_rustls::RustlsConfig;
 
 #[tokio::main]
 async fn main() {
@@ -284,7 +284,7 @@ impl Db {
                         announcement: None,
                         description: "Today, 3pm, you know where".to_string(),
                         expiration: None,
-                        results: vec![PollResult2 {
+                        results: vec![PollResult {
                             requirements: vec![Requirement::AtLeast {
                                 metric_index: 0,
                                 minimum: 2,
