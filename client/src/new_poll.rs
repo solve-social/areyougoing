@@ -71,9 +71,10 @@ impl NewPoll {
                 }
                 ui_data.available_rect = Some(ui.available_rect_before_wrap());
 
-                let effective_title = match (&poll.title, &poll.questions[0].prompt) {
+                let effective_title = match (&poll.title, poll.questions.get(0).map(|q| &q.prompt))
+                {
                     (main_title, _) if !main_title.is_empty() => Some(main_title),
-                    (_, first_prompt) if !first_prompt.is_empty() => Some(first_prompt),
+                    (_, Some(first_prompt)) if !first_prompt.is_empty() => Some(first_prompt),
                     _ => None,
                 };
                 ui.heading(format!(
