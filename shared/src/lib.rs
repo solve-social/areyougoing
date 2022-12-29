@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
 pub struct Question {
     pub prompt: String,
     pub form: Form,
@@ -17,6 +17,14 @@ pub enum FormResponse {
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Form {
     ChooseOneorNone { options: Vec<String> },
+}
+
+impl Default for Form {
+    fn default() -> Self {
+        Self::ChooseOneorNone {
+            options: Default::default(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
