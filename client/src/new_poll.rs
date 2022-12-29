@@ -1,4 +1,4 @@
-use crate::misc::{Submitter, UiExt};
+use crate::misc::{ArrangeableList, Submitter, UiExt};
 use areyougoing_shared::{
     CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Question, Requirement,
 };
@@ -251,73 +251,20 @@ impl NewPoll {
 
                 match &mut question.form {
                     Form::ChooseOneorNone { ref mut options } => {
-                        let mut new_option_index = None;
-                        let mut delete_i = None;
-                        let mut swap_indices = None;
-                        let num_options = options.len();
-                        for (option_i, option) in options.iter_mut().enumerate() {
-                            ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    ui.spacing_mut().button_padding = Vec2 { x: 0., y: 0.0 };
-                                    ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 1.0 };
-
-                                    ui.add_enabled_ui(num_options > 1, |ui| {
-                                        if ui
-                                            .small_button("🗑")
-                                            .on_hover_text("Delete option")
-                                            .clicked()
-                                        {
-                                            delete_i = Some(option_i);
-                                        }
+                        ArrangeableList::new(options, "Option").min_items(1).show(
+                            ui,
+                            |list_state, ui, option| {
+                                ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        list_state.show_controls(ui);
+                                        ui.add(TextEdit::singleline(option).hint_text(format!(
+                                            "Option {}",
+                                            list_state.current_index + 1
+                                        )));
                                     });
-
-                                    ui.add_enabled_ui(option_i < num_options - 1, |ui| {
-                                        if ui
-                                            .small_button("⬇")
-                                            .on_hover_text("Move option down")
-                                            .clicked()
-                                        {
-                                            swap_indices = Some((option_i, option_i + 1));
-                                        }
-                                    });
-                                    ui.add_enabled_ui(option_i != 0, |ui| {
-                                        if ui
-                                            .small_button("⬆")
-                                            .on_hover_text("Move option up")
-                                            .clicked()
-                                        {
-                                            swap_indices = Some((option_i, option_i - 1));
-                                        }
-                                    });
-                                    if ui
-                                        .small_button("➕")
-                                        .on_hover_text("Insert option after this one")
-                                        .clicked()
-                                    {
-                                        new_option_index = Some(option_i + 1);
-                                    }
-                                    ui.add(
-                                        TextEdit::singleline(option)
-                                            .hint_text(format!("Option {}", option_i + 1)),
-                                    );
                                 });
-                            });
-                        }
-                        if let Some(index) = delete_i {
-                            options.remove(index);
-                            ui.ctx().request_repaint_after(Duration::from_millis(100));
-                        }
-                        if options.is_empty() {
-                            new_option_index = Some(0);
-                        }
-                        if let Some(index) = new_option_index {
-                            options.insert(index, "".to_string());
-                            ui.ctx().request_repaint_after(Duration::from_millis(100));
-                        }
-                        if let Some((a, b)) = swap_indices {
-                            options.swap(a, b);
-                            ui.ctx().request_repaint_after(Duration::from_millis(100));
-                        }
+                            },
+                        );
                     }
                 }
             });
