@@ -73,57 +73,66 @@ impl NewPoll {
 
                 ui.heading("Create a new poll!");
 
-                let tabs_rect = if let Some(rect) = ui_data.tabs_rect {
-                    let left_margin = (ui.available_width() - rect.width()).max(0.) / 2.0;
-                    Rect {
-                        min: pos2(left_margin, ui.cursor().top()),
-                        max: pos2(ui.available_width(), f32::INFINITY),
-                    }
-                } else {
-                    ui.max_rect()
-                };
+                if ui_data.advanced_mode {
+                    let tabs_rect = if let Some(rect) = ui_data.tabs_rect {
+                        let left_margin = (ui.available_width() - rect.width()).max(0.) / 2.0;
+                        Rect {
+                            min: pos2(left_margin, ui.cursor().top()),
+                            max: pos2(ui.available_width(), f32::INFINITY),
+                        }
+                    } else {
+                        ui.max_rect()
+                    };
 
-                ui.allocate_ui_at_rect(tabs_rect, |ui| {
-                    let response = ui.with_layout(
-                        Layout::left_to_right(Align::Min).with_main_wrap(true),
-                        |ui| {
-                            for tab in all::<UiTab>() {
-                                ui.add_enabled_ui(*ui_tab != tab, |ui| {
-                                    let mut button = Button::new(
-                                        RichText::new(
-                                            format!("{tab:?}").split(':').last().unwrap(),
-                                        )
-                                        .font(FontId::proportional(17.)),
-                                    );
-                                    if *ui_tab == tab {
-                                        button = button.fill(ui.style().visuals.selection.bg_fill);
-                                    }
-                                    if ui.add(button).clicked() {
-                                        *ui_tab = tab;
-                                    }
-                                });
-                            }
-                        },
-                    );
-                    ui_data.tabs_rect =
-                        Some(response.response.rect.shrink2(ui.spacing().item_spacing));
-                });
+                    ui.allocate_ui_at_rect(tabs_rect, |ui| {
+                        let response = ui.with_layout(
+                            Layout::left_to_right(Align::Min).with_main_wrap(true),
+                            |ui| {
+                                for tab in all::<UiTab>() {
+                                    ui.add_enabled_ui(*ui_tab != tab, |ui| {
+                                        let mut button = Button::new(
+                                            RichText::new(
+                                                format!("{tab:?}").split(':').last().unwrap(),
+                                            )
+                                            .font(FontId::proportional(17.)),
+                                        );
+                                        if *ui_tab == tab {
+                                            button =
+                                                button.fill(ui.style().visuals.selection.bg_fill);
+                                        }
+                                        if ui.add(button).clicked() {
+                                            *ui_tab = tab;
+                                        }
+                                    });
+                                }
+                            },
+                        );
+                        ui_data.tabs_rect =
+                            Some(response.response.rect.shrink2(ui.spacing().item_spacing));
+                    });
+                } else {
+                    //
+                }
 
                 ui.separator();
 
                 ScrollArea::vertical()
                     .id_source("create_poll_scroll")
                     .show(ui, |ui| {
-                        match ui_tab {
-                            UiTab::Questions => {
-                                Self::show_main_form(ui, poll, ui_data);
+                        if ui_data.advanced_mode {
+                            match ui_tab {
+                                UiTab::Questions => {
+                                    Self::show_main_form(ui, poll, ui_data);
+                                }
+                                UiTab::Metrics => {
+                                    Self::show_metrics_form(ui, poll, ui_data);
+                                }
+                                UiTab::Results => {
+                                    Self::show_results_form(ui, poll, ui_data);
+                                }
                             }
-                            UiTab::Metrics => {
-                                Self::show_metrics_form(ui, poll, ui_data);
-                            }
-                            UiTab::Results => {
-                                Self::show_results_form(ui, poll, ui_data);
-                            }
+                        } else {
+                            //
                         }
                         ui.separator();
                         if ui.button("SUBMIT").clicked() {
