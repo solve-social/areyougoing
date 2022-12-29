@@ -302,6 +302,7 @@ pub struct ArrangeableListInner {
     swap_indices: Option<(usize, usize)>,
     item_description: String,
     item_spacing: Option<Vec2>,
+    add_button_is_at_bottom: bool,
 }
 
 impl ArrangeableListInner {
@@ -340,10 +341,11 @@ impl ArrangeableListInner {
                 self.swap_indices = Some((self.current_index, self.current_index - 1));
             }
         });
-        if ui
-            .small_button("➕")
-            .on_hover_text(format!("Insert {} After This", self.item_description))
-            .clicked()
+        if !self.add_button_is_at_bottom
+            && ui
+                .small_button("➕")
+                .on_hover_text(format!("Insert {} After This", self.item_description))
+                .clicked()
         {
             self.new_index = Some(self.current_index + 1);
         }
@@ -377,6 +379,11 @@ where
         self
     }
 
+    pub fn add_button_is_at_bottom(mut self) -> Self {
+        self.inner.add_button_is_at_bottom = true;
+        self
+    }
+
     pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F)
     where
         F: FnMut(&mut ArrangeableListInner, &mut Ui, &mut T),
@@ -384,6 +391,14 @@ where
         for (item_i, item) in self.items.iter_mut().enumerate() {
             self.inner.current_index = item_i;
             add_contents(&mut self.inner, ui, item);
+
+            if self.inner.add_button_is_at_bottom
+                && ui
+                    .small_button(format!("Add {}", self.inner.item_description))
+                    .clicked()
+            {
+                self.inner.new_index = Some(self.inner.current_index + 1);
+            }
         }
         if let Some(index) = self.inner.delete_index {
             self.items.remove(index);

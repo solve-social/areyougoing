@@ -1,6 +1,6 @@
 use crate::misc::{ArrangeableList, Submitter, UiExt};
 use areyougoing_shared::{
-    CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Question, Requirement,
+    CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult2, Requirement,
 };
 use derivative::Derivative;
 use egui::{
@@ -186,118 +186,68 @@ impl NewPoll {
                 .desired_rows(1),
         );
 
-        let mut new_question_index = None;
-        let mut delete_i = None;
-        let mut swap_indices = None;
+        ArrangeableList::new(&mut poll.questions, "Question")
+            .min_items(1)
+            .item_spacing(vec2(3., 1.))
+            .add_button_is_at_bottom()
+            .show(ui, |list_state, ui, question| {
+                let response = ui.group(|ui| {
+                    let label_response =
+                        ui.label(format!("Question {}", list_state.current_index + 1));
 
-        let num_questions = poll.questions.len();
-        for (question_i, question) in poll.questions.iter_mut().enumerate() {
-            let response = ui.group(|ui| {
-                let label_response = ui.label(format!("Question {}", question_i + 1));
-
-                if let Some(fields_rect) = ui_data.fields_rect {
-                    let question_controls_rect = Rect {
-                        min: Pos2 {
-                            x: label_response.rect.right(),
-                            y: label_response.rect.top(),
-                        },
-                        max: Pos2 {
-                            x: fields_rect.right(),
-                            y: label_response.rect.bottom(),
-                        },
-                    };
-                    ui.allocate_ui_at_rect(question_controls_rect, |ui| {
-                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            ui.spacing_mut().button_padding = Vec2 { x: 0., y: 0.0 };
-                            ui.spacing_mut().item_spacing = Vec2 { x: 3., y: 0.0 };
-
-                            ui.add_enabled_ui(num_questions > 1, |ui| {
-                                if ui
-                                    .small_button("🗑")
-                                    .on_hover_text("Delete question")
-                                    .clicked()
-                                {
-                                    delete_i = Some(question_i);
-                                }
-                            });
-                            ui.add_enabled_ui(question_i < num_questions - 1, |ui| {
-                                if ui
-                                    .small_button("⬇")
-                                    .on_hover_text("Move question down")
-                                    .clicked()
-                                {
-                                    swap_indices = Some((question_i, question_i + 1));
-                                }
-                            });
-                            ui.add_enabled_ui(question_i != 0, |ui| {
-                                if ui
-                                    .small_button("⬆")
-                                    .on_hover_text("Move question up")
-                                    .clicked()
-                                {
-                                    swap_indices = Some((question_i, question_i - 1));
-                                }
+                    if let Some(fields_rect) = ui_data.fields_rect {
+                        let question_controls_rect = Rect {
+                            min: Pos2 {
+                                x: label_response.rect.right(),
+                                y: label_response.rect.top(),
+                            },
+                            max: Pos2 {
+                                x: fields_rect.right(),
+                                y: label_response.rect.bottom(),
+                            },
+                        };
+                        ui.allocate_ui_at_rect(question_controls_rect, |ui| {
+                            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                list_state.show_controls(ui);
                             });
                         });
-                    });
-                }
-                let response = ui.add(
-                    TextEdit::multiline(&mut question.prompt)
-                        .desired_rows(1)
-                        .hint_text("Prompt"),
-                );
-                ui_data.fields_rect = Some(response.rect);
-                ui.separator();
+                    }
+                    let response = ui.add(
+                        TextEdit::multiline(&mut question.prompt)
+                            .desired_rows(1)
+                            .hint_text("Prompt"),
+                    );
+                    ui_data.fields_rect = Some(response.rect);
+                    ui.separator();
 
-                match &mut question.form {
-                    Form::ChooseOneorNone { ref mut options } => {
-                        ArrangeableList::new(options, "Option")
-                            .min_items(1)
-                            .item_spacing(vec2(3., 1.))
-                            .show(ui, |list_state, ui, option| {
-                                ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        list_state.show_controls(ui);
-                                        ui.add(TextEdit::singleline(option).hint_text(format!(
-                                            "Option {}",
-                                            list_state.current_index + 1
-                                        )));
+                    match &mut question.form {
+                        Form::ChooseOneorNone { ref mut options } => {
+                            ArrangeableList::new(options, "Option")
+                                .min_items(1)
+                                .item_spacing(vec2(3., 1.))
+                                .show(ui, |list_state, ui, option| {
+                                    ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
+                                        ui.with_layout(
+                                            Layout::right_to_left(Align::Center),
+                                            |ui| {
+                                                list_state.show_controls(ui);
+                                                ui.add(TextEdit::singleline(option).hint_text(
+                                                    format!(
+                                                        "Option {}",
+                                                        list_state.current_index + 1
+                                                    ),
+                                                ));
+                                            },
+                                        );
                                     });
                                 });
-                            });
+                        }
                     }
+                });
+                if list_state.current_index == 0 {
+                    ui_data.question_group_rect = Some(response.response.rect);
                 }
             });
-            if question_i == 0 {
-                ui_data.question_group_rect = Some(response.response.rect);
-            }
-            if ui.small_button("Add Question").clicked() {
-                new_question_index = Some(question_i + 1);
-            }
-        }
-        if let Some(index) = delete_i {
-            poll.questions.remove(index);
-            ui.ctx().request_repaint_after(Duration::from_millis(100));
-        }
-        if let Some((a, b)) = swap_indices {
-            poll.questions.swap(a, b);
-            ui.ctx().request_repaint_after(Duration::from_millis(100));
-        }
-        if poll.questions.is_empty() {
-            new_question_index = Some(0);
-        }
-        if let Some(index) = new_question_index {
-            poll.questions.insert(
-                index,
-                Question {
-                    prompt: "".to_string(),
-                    form: Form::ChooseOneorNone {
-                        options: Vec::new(),
-                    },
-                },
-            );
-            ui.ctx().request_repaint_after(Duration::from_millis(100));
-        }
     }
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
