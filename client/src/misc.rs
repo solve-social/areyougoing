@@ -311,6 +311,8 @@ impl ArrangeableListInner {
         ui.spacing_mut().button_padding = vec2(0., 0.);
         if let Some(spacing) = self.item_spacing {
             ui.spacing_mut().item_spacing = spacing;
+        } else {
+            ui.spacing_mut().item_spacing = vec2(3., 1.);
         }
 
         ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
@@ -388,6 +390,15 @@ where
     where
         F: FnMut(&mut ArrangeableListInner, &mut Ui, &mut T),
     {
+        if self.inner.min_items == 0
+            && self.inner.num_items == 0
+            && ui
+                .small_button(format!("Add {}", self.inner.item_description))
+                .clicked()
+        {
+            self.inner.new_index = Some(0);
+        }
+
         for (item_i, item) in self.items.iter_mut().enumerate() {
             self.inner.current_index = item_i;
             add_contents(&mut self.inner, ui, item);
