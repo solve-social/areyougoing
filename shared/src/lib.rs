@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
+use strum::EnumIter;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
 pub struct Question {
@@ -14,10 +15,27 @@ pub enum FormResponse {
     ChooseOneOrNone(Option<Choice>),
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumIter)]
 pub enum Form {
     ChooseOneorNone { options: Vec<String> },
     YesOrNo,
+}
+
+impl Display for Form {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Form::ChooseOneorNone { .. } => {
+                    "Choose One/None"
+                }
+                Form::YesOrNo => {
+                    "Yes/No"
+                }
+            }
+        )
+    }
 }
 
 impl Default for Form {

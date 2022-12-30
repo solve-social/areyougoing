@@ -9,7 +9,8 @@ use egui::{
 };
 use enum_iterator::{all, Sequence};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{mem::discriminant, time::Duration};
+use strum::IntoEnumIterator;
 use url::Url;
 
 #[derive(Derivative)]
@@ -191,10 +192,23 @@ impl NewPoll {
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, question| {
                 let response = ui.group(|ui| {
-                    let label_response =
-                        ui.label(format!("Question {}", list_state.current_index + 1));
-
                     if let Some(fields_rect) = ui_data.fields_rect {
+                        let label_response = ui
+                            .allocate_ui_at_rect(
+                                Rect {
+                                    min: pos2(fields_rect.left(), ui.cursor().top()),
+                                    max: pos2(fields_rect.right(), f32::INFINITY),
+                                },
+                                |ui| {
+                                    ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                        ui.label(format!(
+                                            "Question {}",
+                                            list_state.current_index + 1
+                                        ))
+                                    })
+                                },
+                            )
+                            .response;
                         let question_controls_rect = Rect {
                             min: Pos2 {
                                 x: label_response.rect.right(),
@@ -208,6 +222,25 @@ impl NewPoll {
                         ui.allocate_ui_at_rect(question_controls_rect, |ui| {
                             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                                 list_state.show_controls(ui);
+                                ui.spacing_mut().button_padding.y = 0.0;
+                                ui.spacing_mut().item_spacing.x = 2.0;
+                                ui.separator();
+                                ui.menu_button("Type", |ui| {
+                                    for variant in Form::iter() {
+                                        let mut button = Button::new(variant.to_string());
+                                        let selected =
+                                            discriminant(&variant) == discriminant(&question.form);
+                                        if selected {
+                                            button =
+                                                button.fill(ui.style().visuals.selection.bg_fill);
+                                        }
+                                        let response = ui.add(button);
+                                        if !selected && response.clicked() {
+                                            question.form = variant;
+                                            ui.close_menu();
+                                        }
+                                    }
+                                })
                             });
                         });
                     }
@@ -217,10 +250,10 @@ impl NewPoll {
                             .hint_text("Prompt"),
                     );
                     ui_data.fields_rect = Some(response.rect);
-                    ui.separator();
 
                     match &mut question.form {
                         Form::ChooseOneorNone { ref mut options } => {
+                            ui.separator();
                             OrderableList::new(options, "Option").min_items(1).show(
                                 ui,
                                 |list_state, ui, option| {
@@ -251,6 +284,7 @@ impl NewPoll {
     }
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
+        let mut invalidated_metric_indices = Vec::new();
         OrderableList::new_with_factory(&mut poll.metric_trackers, "Metric", || {
             MetricTracker::init_from_questions(&poll.questions)
         })
@@ -299,9 +333,15 @@ impl NewPoll {
                                 |i| format!("{i}: {}", limit(&poll.questions[i].prompt)),
                             );
                         });
+
                         match &poll.questions[*question_index].form {
                             Form::ChooseOneorNone { options } => {
-                                let mut selected = *choice.as_index().unwrap() as usize;
+                                let mut selected = if let Some(&selected) = choice.as_index() {
+                                    selected as usize
+                                } else {
+                                    invalidated_metric_indices.push(list_state.current_index);
+                                    return;
+                                };
                                 ui.label("Answer");
                                 ui.allocate_ui(field_shape, |ui| {
                                     ComboBox::from_id_source(format!(
@@ -319,10 +359,15 @@ impl NewPoll {
                                 *choice = Choice::Index(selected as u8);
                             }
                             Form::YesOrNo => {
-                                let mut selected = if *choice.as_yes_or_no().unwrap() {
-                                    1
+                                let mut selected = if let Some(&selected) = choice.as_yes_or_no() {
+                                    if selected {
+                                        1
+                                    } else {
+                                        0
+                                    }
                                 } else {
-                                    0
+                                    invalidated_metric_indices.push(list_state.current_index);
+                                    return;
                                 };
                                 ui.label("Answer");
                                 ui.allocate_ui(field_shape, |ui| {
@@ -352,6 +397,9 @@ impl NewPoll {
                 ui_data.question_group_rect = Some(response.response.rect);
             }
         });
+        for i in invalidated_metric_indices {
+            poll.metric_trackers.remove(i);
+        }
     }
 
     fn show_results_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
