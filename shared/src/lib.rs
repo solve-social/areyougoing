@@ -40,15 +40,6 @@ impl Default for PollStatus {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-pub enum ConditionDescription {
-    AtLeast {
-        minimum: u16,
-        question_index: usize,
-        choice_index: u8,
-    },
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Metric {
     SpecificResponses {
         question_index: usize,
@@ -138,9 +129,21 @@ impl Requirement {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-pub struct PollResult2 {
+pub struct PollResult {
     pub desc: String,
     pub requirements: Vec<Requirement>,
+}
+
+impl Default for PollResult {
+    fn default() -> Self {
+        Self {
+            desc: "".to_string(),
+            requirements: vec![Requirement::AtLeast {
+                metric_index: 0,
+                minimum: 1,
+            }],
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
@@ -150,72 +153,10 @@ pub struct ResultState {
 }
 
 impl ResultState {
-    pub fn from_result(result: &PollResult2) -> Self {
+    pub fn from_result(result: &PollResult) -> Self {
         Self {
             requirements_met: vec![false; result.requirements.len()],
             overall_met: false,
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-pub enum ConditionState {
-    MetOrNotMet(bool),
-    Progress(u16),
-}
-
-impl Default for ConditionState {
-    fn default() -> Self {
-        ConditionState::MetOrNotMet(false)
-    }
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
-pub struct PollResult {
-    pub description: ConditionDescription,
-    pub result: String,
-    pub progress: ConditionState,
-}
-
-impl PollResult {
-    pub fn update(&mut self, responses: &HashMap<String, Vec<FormResponse>>) {
-        let PollResult {
-            description,
-            result: _,
-            ref mut progress,
-        } = self;
-
-        match description {
-            ConditionDescription::AtLeast {
-                minimum,
-                question_index,
-                choice_index,
-            } => {
-                let mut count = 0;
-                for poll_response in responses.values() {
-                    match poll_response.get(*question_index).unwrap() {
-                        FormResponse::ChooseOneOrNone(choice) => {
-                            if let Some(chosen_index) = choice {
-                                if chosen_index == choice_index {
-                                    count += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-                let condition_met = count >= *minimum;
-                if condition_met {
-                    println!("Condition met: {description:?}");
-                }
-                match progress {
-                    ConditionState::MetOrNotMet(met) => {
-                        *met = condition_met;
-                    }
-                    ConditionState::Progress(progress) => {
-                        *progress = count;
-                    }
-                }
-            }
         }
     }
 }
@@ -233,7 +174,7 @@ pub struct Poll {
     pub expiration: Option<DateTime<Utc>>,
     pub announcement: Option<String>,
     pub metric_trackers: Vec<MetricTracker>,
-    pub results: Vec<PollResult2>,
+    pub results: Vec<PollResult>,
     pub status: PollStatus,
     pub questions: Vec<Question>,
 }

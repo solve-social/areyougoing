@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
-use egui::{pos2, vec2, Align, Layout, NumExt, Rect, RichText, Sense, Ui};
+use egui::{pos2, vec2, Align, Layout, NumExt, Rect, RichText, Sense, Ui, Vec2};
 use futures_lite::{future, Future};
 use gloo::events::EventListener;
 use gloo::{console::__macro::JsValue, net::http::RequestMode};
@@ -282,6 +283,148 @@ impl UiExt for Ui {
             );
         } else {
             ui.spinner();
+        }
+    }
+}
+
+pub struct OrderableList<'a, T> {
+    items: &'a mut Vec<T>,
+    inner: OrederableListInner,
+}
+
+#[derive(Default)]
+pub struct OrederableListInner {
+    num_items: usize,
+    pub current_index: usize,
+    min_items: usize,
+    new_index: Option<usize>,
+    delete_index: Option<usize>,
+    swap_indices: Option<(usize, usize)>,
+    item_description: String,
+    item_spacing: Option<Vec2>,
+    add_button_is_at_bottom: bool,
+}
+
+impl OrederableListInner {
+    pub fn show_controls(&mut self, ui: &mut Ui) {
+        let spacing = ui.spacing().clone();
+        ui.spacing_mut().button_padding = vec2(0., 0.);
+        if let Some(spacing) = self.item_spacing {
+            ui.spacing_mut().item_spacing = spacing;
+        } else {
+            ui.spacing_mut().item_spacing = vec2(3., 1.);
+        }
+
+        ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
+            if ui
+                .small_button("🗑")
+                .on_hover_text(format!("Delete {}", self.item_description))
+                .clicked()
+            {
+                self.delete_index = Some(self.current_index);
+            }
+        });
+
+        ui.add_enabled_ui(self.current_index < self.num_items - 1, |ui| {
+            if ui
+                .small_button("⬇")
+                .on_hover_text(format!("Move {} Down", self.item_description))
+                .clicked()
+            {
+                self.swap_indices = Some((self.current_index, self.current_index + 1));
+            }
+        });
+        ui.add_enabled_ui(self.current_index != 0, |ui| {
+            if ui
+                .small_button("⬆")
+                .on_hover_text(format!("Move {} Up", self.item_description))
+                .clicked()
+            {
+                self.swap_indices = Some((self.current_index, self.current_index - 1));
+            }
+        });
+        if !self.add_button_is_at_bottom
+            && ui
+                .small_button("➕")
+                .on_hover_text(format!("Insert {} After This", self.item_description))
+                .clicked()
+        {
+            self.new_index = Some(self.current_index + 1);
+        }
+
+        *ui.spacing_mut() = spacing;
+    }
+}
+
+impl<'a, T> OrderableList<'a, T>
+where
+    T: Default,
+{
+    pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self {
+        Self {
+            inner: OrederableListInner {
+                num_items: items.len(),
+                item_description: item_description.to_string(),
+                ..Default::default()
+            },
+            items,
+        }
+    }
+
+    pub fn min_items(mut self, min_items: usize) -> Self {
+        self.inner.min_items = min_items;
+        self
+    }
+
+    pub fn item_spacing(mut self, item_spacing: Vec2) -> Self {
+        self.inner.item_spacing = Some(item_spacing);
+        self
+    }
+
+    pub fn add_button_is_at_bottom(mut self) -> Self {
+        self.inner.add_button_is_at_bottom = true;
+        self
+    }
+
+    pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F)
+    where
+        F: FnMut(&mut OrederableListInner, &mut Ui, &mut T),
+    {
+        if self.inner.min_items == 0
+            && self.inner.num_items == 0
+            && ui
+                .small_button(format!("Add {}", self.inner.item_description))
+                .clicked()
+        {
+            self.inner.new_index = Some(0);
+        }
+
+        for (item_i, item) in self.items.iter_mut().enumerate() {
+            self.inner.current_index = item_i;
+            add_contents(&mut self.inner, ui, item);
+
+            if self.inner.add_button_is_at_bottom
+                && ui
+                    .small_button(format!("Add {}", self.inner.item_description))
+                    .clicked()
+            {
+                self.inner.new_index = Some(self.inner.current_index + 1);
+            }
+        }
+        if let Some(index) = self.inner.delete_index {
+            self.items.remove(index);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        if self.items.len() < self.inner.min_items {
+            self.inner.new_index = Some(self.items.len());
+        }
+        if let Some(index) = self.inner.new_index {
+            self.items.insert(index, T::default());
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        if let Some((a, b)) = self.inner.swap_indices {
+            self.items.swap(a, b);
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
     }
 }
