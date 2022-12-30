@@ -307,7 +307,7 @@ pub struct OrederableListInner {
 }
 
 impl OrederableListInner {
-    pub fn show_controls(&mut self, ui: &mut Ui) {
+    pub fn show_controls(&mut self, ui: &mut Ui) -> Rect {
         let spacing = ui.spacing().clone();
         ui.spacing_mut().button_padding = vec2(0., 0.);
         if let Some(spacing) = self.item_spacing {
@@ -316,9 +316,12 @@ impl OrederableListInner {
             ui.spacing_mut().item_spacing = vec2(3., 1.);
         }
 
+        let mut rect = None;
+
         ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
-            if ui
-                .small_button("🗑")
+            let response = ui.small_button("🗑");
+            rect = Some(response.rect);
+            if response
                 .on_hover_text(format!("Delete {}", self.item_description))
                 .clicked()
             {
@@ -327,8 +330,9 @@ impl OrederableListInner {
         });
 
         ui.add_enabled_ui(self.current_index < self.num_items - 1, |ui| {
-            if ui
-                .small_button("⬇")
+            let response = ui.small_button("⬇");
+            rect = Some(rect.unwrap().union(response.rect));
+            if response
                 .on_hover_text(format!("Move {} Down", self.item_description))
                 .clicked()
             {
@@ -336,24 +340,28 @@ impl OrederableListInner {
             }
         });
         ui.add_enabled_ui(self.current_index != 0, |ui| {
-            if ui
-                .small_button("⬆")
+            let response = ui.small_button("⬆");
+            rect = Some(rect.unwrap().union(response.rect));
+            if response
                 .on_hover_text(format!("Move {} Up", self.item_description))
                 .clicked()
             {
                 self.swap_indices = Some((self.current_index, self.current_index - 1));
             }
         });
-        if !self.add_button_is_at_bottom
-            && ui
-                .small_button("➕")
+        if !self.add_button_is_at_bottom {
+            let response = ui.small_button("➕");
+            rect = Some(rect.unwrap().union(response.rect));
+            if response
                 .on_hover_text(format!("Insert {} After This", self.item_description))
                 .clicked()
-        {
-            self.new_index = Some(self.current_index + 1);
+            {
+                self.new_index = Some(self.current_index + 1);
+            }
         }
 
         *ui.spacing_mut() = spacing;
+        rect.unwrap()
     }
 }
 
