@@ -1,5 +1,5 @@
 use crate::misc::{OrderableList, Submitter, UiExt};
-use areyougoing_shared::{CreatePollResult, Form, Metric, Poll, Requirement};
+use areyougoing_shared::{CreatePollResult, Form, Metric, Poll, Question, Requirement};
 use derivative::Derivative;
 use egui::{
     pos2, Align, Button, ComboBox, FontId, Layout, Pos2, Rect, RichText, ScrollArea, TextEdit, Ui,
