@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
 pub struct Question {
@@ -11,12 +11,13 @@ pub struct Question {
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub enum FormResponse {
-    ChooseOneOrNone(Option<u8>),
+    ChooseOneOrNone(Option<Choice>),
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Form {
     ChooseOneorNone { options: Vec<String> },
+    YesOrNo,
 }
 
 impl Default for Form {
@@ -39,11 +40,17 @@ impl Default for PollStatus {
     }
 }
 
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumAsInner)]
+pub enum Choice {
+    Index(u8),
+    YesOrNo(bool),
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub enum Metric {
     SpecificResponses {
         question_index: usize,
-        choice_index: u8,
+        choice: Choice,
     },
 }
 
@@ -52,31 +59,54 @@ impl Metric {
         match self {
             Metric::SpecificResponses {
                 question_index,
-                choice_index,
+                choice,
             } => {
                 let Question { prompt, form } = &questions[*question_index];
+                use Form::*;
                 let choice = match form {
-                    Form::ChooseOneorNone { options } => &options[*choice_index as usize],
+                    ChooseOneorNone { options } => &options[*choice.as_index().unwrap() as usize],
+                    YesOrNo => {
+                        if *choice.as_yes_or_no().unwrap() {
+                            "Yes"
+                        } else {
+                            "No"
+                        }
+                    }
                 };
-                format!("\"{choice}\" to \"{prompt}\"")
+                format!("{choice} to {prompt}")
             }
         }
     }
 }
 
-impl Default for Metric {
-    fn default() -> Self {
-        Self::SpecificResponses {
-            question_index: 0,
-            choice_index: 0,
-        }
-    }
-}
+// impl Default for Metric {
+//     fn default() -> Self {
+//         Self::SpecificResponses {
+//             question_index: 0,
+//             choice: 0,
+//         }
+//     }
+// }
 
-#[derive(Deserialize, Serialize, PartialEq, Clone, Debug, Default)]
+#[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct MetricTracker {
     pub metric: Metric,
     pub publicly_visible: bool,
+}
+
+impl MetricTracker {
+    pub fn init_from_questions(questions: &[Question]) -> Option<Self> {
+        questions.get(0).map(|question| MetricTracker {
+            publicly_visible: false,
+            metric: Metric::SpecificResponses {
+                question_index: 0,
+                choice: match question.form {
+                    Form::ChooseOneorNone { .. } => Choice::Index(0),
+                    Form::YesOrNo => Choice::YesOrNo(true),
+                },
+            },
+        })
+    }
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
@@ -89,14 +119,14 @@ impl Metric {
         match self {
             Metric::SpecificResponses {
                 question_index,
-                choice_index,
+                choice: metric_choice,
             } => {
                 let mut count = 0;
                 for poll_response in responses.values() {
                     match poll_response.get(*question_index).unwrap() {
                         FormResponse::ChooseOneOrNone(choice) => {
                             if let Some(chosen_index) = choice {
-                                if chosen_index == choice_index {
+                                if chosen_index == metric_choice {
                                     count += 1;
                                 }
                             }
@@ -184,7 +214,7 @@ impl Poll {
         self.questions
             .iter()
             .map(|q| match q.form {
-                Form::ChooseOneorNone { options: _ } => FormResponse::ChooseOneOrNone(None),
+                Form::ChooseOneorNone { .. } | Form::YesOrNo => FormResponse::ChooseOneOrNone(None),
             })
             .collect::<Vec<_>>()
     }

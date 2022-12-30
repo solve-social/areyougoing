@@ -290,6 +290,7 @@ impl UiExt for Ui {
 pub struct OrderableList<'a, T> {
     items: &'a mut Vec<T>,
     inner: OrederableListInner,
+    item_factory: Box<dyn 'a + Fn() -> Option<T>>,
 }
 
 #[derive(Default)]
@@ -356,11 +357,11 @@ impl OrederableListInner {
     }
 }
 
-impl<'a, T> OrderableList<'a, T>
-where
-    T: Default,
-{
-    pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self {
+impl<'a, T> OrderableList<'a, T> {
+    pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self
+    where
+        T: Default,
+    {
         Self {
             inner: OrederableListInner {
                 num_items: items.len(),
@@ -368,6 +369,26 @@ where
                 ..Default::default()
             },
             items,
+            item_factory: Box::new(|| Some(T::default())),
+        }
+    }
+
+    pub fn new_with_factory<F>(
+        items: &'a mut Vec<T>,
+        item_description: &str,
+        item_factory: F,
+    ) -> Self
+    where
+        F: Fn() -> Option<T> + 'a,
+    {
+        Self {
+            inner: OrederableListInner {
+                num_items: items.len(),
+                item_description: item_description.to_string(),
+                ..Default::default()
+            },
+            items,
+            item_factory: Box::new(item_factory),
         }
     }
 
@@ -419,8 +440,10 @@ where
             self.inner.new_index = Some(self.items.len());
         }
         if let Some(index) = self.inner.new_index {
-            self.items.insert(index, T::default());
-            ui.ctx().request_repaint_after(Duration::from_millis(100));
+            if let Some(new_item) = (self.item_factory)() {
+                self.items.insert(index, new_item);
+                ui.ctx().request_repaint_after(Duration::from_millis(100));
+            }
         }
         if let Some((a, b)) = self.inner.swap_indices {
             self.items.swap(a, b);

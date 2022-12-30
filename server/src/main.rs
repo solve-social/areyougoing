@@ -276,6 +276,36 @@ impl Db {
     fn new() -> Self {
         let mut db = Self::get_from_file().unwrap_or_else(|| {
             let mut db = Self::default();
+            let default_questions = vec![
+                Question {
+                    prompt: "Are you going?".to_string(),
+                    form: Form::ChooseOneorNone {
+                        options: vec!["Yes".to_string(), "No".to_string()],
+                    },
+                },
+                Question {
+                    prompt: "How are you arriving?".to_string(),
+                    form: Form::ChooseOneorNone {
+                        options: vec![
+                            "Driving own car".to_string(),
+                            "Walking".to_string(),
+                            "Uber".to_string(),
+                        ],
+                    },
+                },
+                Question {
+                    prompt: "Which restaurant would you prefer?".to_string(),
+                    form: Form::ChooseOneorNone {
+                        options: vec![
+                            "Chilis".to_string(),
+                            "Burger King".to_string(),
+                            "Cheddars".to_string(),
+                            "Papasitos".to_string(),
+                            "Taco Bell".to_string(),
+                        ],
+                    },
+                },
+            ];
             db.0.insert(
                 0,
                 PollData {
@@ -291,44 +321,12 @@ impl Db {
                             }],
                             desc: "The party happens".to_string(),
                         }],
-                        metric_trackers: vec![MetricTracker {
-                            metric: Metric::SpecificResponses {
-                                question_index: 0,
-                                choice_index: 0,
-                            },
-                            publicly_visible: true,
-                        }],
+                        metric_trackers: vec![MetricTracker::init_from_questions(
+                            &default_questions,
+                        )
+                        .unwrap()],
                         status: PollStatus::SeekingResponses,
-                        questions: vec![
-                            Question {
-                                prompt: "Are you going?".to_string(),
-                                form: Form::ChooseOneorNone {
-                                    options: vec!["Yes".to_string(), "No".to_string()],
-                                },
-                            },
-                            Question {
-                                prompt: "How are you arriving?".to_string(),
-                                form: Form::ChooseOneorNone {
-                                    options: vec![
-                                        "Driving own car".to_string(),
-                                        "Walking".to_string(),
-                                        "Uber".to_string(),
-                                    ],
-                                },
-                            },
-                            Question {
-                                prompt: "Which restaurant would you prefer?".to_string(),
-                                form: Form::ChooseOneorNone {
-                                    options: vec![
-                                        "Chilis".to_string(),
-                                        "Burger King".to_string(),
-                                        "Cheddars".to_string(),
-                                        "Papasitos".to_string(),
-                                        "Taco Bell".to_string(),
-                                    ],
-                                },
-                            },
-                        ],
+                        questions: default_questions,
                     },
                     responses: Default::default(),
                     progresses: Vec::new(),

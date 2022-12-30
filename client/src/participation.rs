@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{app::SignInData, misc::Submitter};
-use areyougoing_shared::{Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
+use areyougoing_shared::{Choice, Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
 use derivative::Derivative;
 use egui::{Button, ScrollArea, TextEdit, Ui};
 use serde::{Deserialize, Serialize};
@@ -86,8 +86,9 @@ impl ParticipationState {
                                         FormResponse::ChooseOneOrNone(choice),
                                     ) => {
                                         for (i, option) in options.iter().enumerate() {
-                                            let selected =
-                                                choice.is_some() && choice.unwrap() == i as u8;
+                                            let selected = choice.is_some()
+                                                && *choice.as_ref().unwrap().as_index().unwrap()
+                                                    == i as u8;
                                             let mut button = Button::new(option);
                                             if selected {
                                                 button = button.fill(
@@ -96,9 +97,47 @@ impl ParticipationState {
                                             }
                                             let response = ui.add(button);
                                             if response.clicked() {
-                                                *choice =
-                                                    if selected { None } else { Some(i as u8) };
+                                                *choice = if selected {
+                                                    None
+                                                } else {
+                                                    Some(Choice::Index(i as u8))
+                                                };
                                             }
+                                        }
+                                    }
+                                    (Form::YesOrNo, FormResponse::ChooseOneOrNone(choice)) => {
+                                        let mut yes_button = Button::new("Yes");
+                                        let mut no_button = Button::new("No");
+
+                                        if let Some(Choice::YesOrNo(yes)) = choice {
+                                            let selected_fill =
+                                                ui.ctx().style().visuals.selection.bg_fill;
+                                            if *yes {
+                                                yes_button = yes_button.fill(selected_fill);
+                                            } else {
+                                                no_button = no_button.fill(selected_fill);
+                                            }
+                                        }
+                                        let yes_response = ui.add(yes_button);
+                                        let no_response = ui.add(no_button);
+                                        if let Some(Choice::YesOrNo(yes)) = choice {
+                                            if yes_response.clicked() {
+                                                if *yes {
+                                                    *choice = None;
+                                                } else {
+                                                    *choice = Some(Choice::YesOrNo(true));
+                                                }
+                                            } else if no_response.clicked() {
+                                                if *yes {
+                                                    *choice = Some(Choice::YesOrNo(false));
+                                                } else {
+                                                    *choice = None;
+                                                }
+                                            }
+                                        } else if yes_response.clicked() {
+                                            *choice = Some(Choice::YesOrNo(true));
+                                        } else if no_response.clicked() {
+                                            *choice = Some(Choice::YesOrNo(false));
                                         }
                                     }
                                 }
