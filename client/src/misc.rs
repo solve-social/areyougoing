@@ -287,13 +287,13 @@ impl UiExt for Ui {
     }
 }
 
-pub struct ArrangeableList<'a, T> {
+pub struct OrderableList<'a, T> {
     items: &'a mut Vec<T>,
-    inner: ArrangeableListInner,
+    inner: OrederableListInner,
 }
 
 #[derive(Default)]
-pub struct ArrangeableListInner {
+pub struct OrederableListInner {
     num_items: usize,
     pub current_index: usize,
     min_items: usize,
@@ -305,7 +305,7 @@ pub struct ArrangeableListInner {
     add_button_is_at_bottom: bool,
 }
 
-impl ArrangeableListInner {
+impl OrederableListInner {
     pub fn show_controls(&mut self, ui: &mut Ui) {
         let spacing = ui.spacing().clone();
         ui.spacing_mut().button_padding = vec2(0., 0.);
@@ -356,13 +356,13 @@ impl ArrangeableListInner {
     }
 }
 
-impl<'a, T> ArrangeableList<'a, T>
+impl<'a, T> OrderableList<'a, T>
 where
     T: Default,
 {
     pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self {
         Self {
-            inner: ArrangeableListInner {
+            inner: OrederableListInner {
                 num_items: items.len(),
                 item_description: item_description.to_string(),
                 ..Default::default()
@@ -388,7 +388,7 @@ where
 
     pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F)
     where
-        F: FnMut(&mut ArrangeableListInner, &mut Ui, &mut T),
+        F: FnMut(&mut OrederableListInner, &mut Ui, &mut T),
     {
         if self.inner.min_items == 0
             && self.inner.num_items == 0

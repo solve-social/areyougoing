@@ -1,4 +1,4 @@
-use crate::misc::{ArrangeableList, Submitter, UiExt};
+use crate::misc::{OrderableList, Submitter, UiExt};
 use areyougoing_shared::{CreatePollResult, Form, Metric, Poll, Requirement};
 use derivative::Derivative;
 use egui::{
@@ -184,7 +184,7 @@ impl NewPoll {
                 .desired_rows(1),
         );
 
-        ArrangeableList::new(&mut poll.questions, "Question")
+        OrderableList::new(&mut poll.questions, "Question")
             .min_items(1)
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, question| {
@@ -219,7 +219,7 @@ impl NewPoll {
 
                     match &mut question.form {
                         Form::ChooseOneorNone { ref mut options } => {
-                            ArrangeableList::new(options, "Option").min_items(1).show(
+                            OrderableList::new(options, "Option").min_items(1).show(
                                 ui,
                                 |list_state, ui, option| {
                                     ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
@@ -248,7 +248,7 @@ impl NewPoll {
     }
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
-        ArrangeableList::new(&mut poll.metric_trackers, "Metric")
+        OrderableList::new(&mut poll.metric_trackers, "Metric")
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, metric_tracker| {
                 let response =
@@ -332,7 +332,7 @@ impl NewPoll {
             return;
         }
 
-        ArrangeableList::new(&mut poll.results, "Metric")
+        OrderableList::new(&mut poll.results, "Metric")
             .min_items(1)
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, result| {
