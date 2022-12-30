@@ -79,15 +79,6 @@ impl Metric {
     }
 }
 
-// impl Default for Metric {
-//     fn default() -> Self {
-//         Self::SpecificResponses {
-//             question_index: 0,
-//             choice: 0,
-//         }
-//     }
-// }
-
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug)]
 pub struct MetricTracker {
     pub metric: Metric,
