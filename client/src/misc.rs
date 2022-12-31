@@ -415,7 +415,7 @@ impl<'a, T> OrderableList<'a, T> {
         self
     }
 
-    pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F)
+    pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F) -> Option<usize>
     where
         F: FnMut(&mut OrederableListInner, &mut Ui, &mut T),
     {
@@ -457,5 +457,6 @@ impl<'a, T> OrderableList<'a, T> {
             self.items.swap(a, b);
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
+        self.inner.delete_index
     }
 }

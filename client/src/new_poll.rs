@@ -1,6 +1,6 @@
 use crate::misc::{OrderableList, Submitter, UiExt};
 use areyougoing_shared::{
-    Choice, CreatePollResult, Form, Metric, MetricTracker, Poll, Requirement,
+    Choice, CreatePollResult, Form, Metric, MetricTracker, Poll, PollResult, Requirement,
 };
 use derivative::Derivative;
 use egui::{
@@ -187,7 +187,8 @@ impl NewPoll {
                 .desired_rows(1),
         );
 
-        OrderableList::new(&mut poll.questions, "Question")
+        let mut reset_index = None;
+        let deleted_index = OrderableList::new(&mut poll.questions, "Question")
             .min_items(1)
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, question| {
@@ -236,6 +237,7 @@ impl NewPoll {
                                         }
                                         let response = ui.add(button);
                                         if !selected && response.clicked() {
+                                            reset_index = Some(list_state.current_index);
                                             question.form = variant;
                                             ui.close_menu();
                                         }
@@ -281,124 +283,157 @@ impl NewPoll {
                     ui_data.question_group_rect = Some(response.response.rect);
                 }
             });
+        if let Some(index) = deleted_index.or(reset_index) {
+            Self::cleanup_question_dependents(index, &mut poll.metric_trackers, &mut poll.results);
+        }
+    }
+
+    fn cleanup_question_dependents(
+        index: usize,
+        metrics: &mut Vec<MetricTracker>,
+        results: &mut Vec<PollResult>,
+    ) {
+        let metrics_to_delete = metrics
+            .iter()
+            .enumerate()
+            .filter(|(_, tracker)| match &tracker.metric {
+                Metric::SpecificResponses { question_index, .. } => *question_index == index,
+            })
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+        for i in metrics_to_delete {
+            metrics.remove(i);
+            Self::cleanup_metric_dependents(i, results);
+        }
+    }
+
+    fn cleanup_metric_dependents(index: usize, results: &mut Vec<PollResult>) {
+        let results_to_delete = results
+            .iter()
+            .enumerate()
+            .filter(|(_, result)| match result.requirements.get(0).unwrap() {
+                Requirement::AtLeast { metric_index, .. } => *metric_index as usize == index,
+            })
+            .map(|(i, _)| i)
+            .collect::<Vec<_>>();
+        for i in results_to_delete {
+            results.remove(i);
+        }
     }
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
-        let mut invalidated_metric_indices = Vec::new();
-        OrderableList::new_with_factory(&mut poll.metric_trackers, "Metric", || {
-            MetricTracker::init_from_questions(&poll.questions)
-        })
-        .add_button_is_at_bottom()
-        .show(ui, |list_state, ui, metric_tracker| {
-            let response = ui.group(|ui| {
-                let label_response = ui.label(format!("Metric {}", list_state.current_index + 1));
-                if let Some(fields_rect) = ui_data.fields_rect {
-                    let result_controls_rect = Rect {
-                        min: Pos2 {
-                            x: label_response.rect.right(),
-                            y: label_response.rect.top(),
-                        },
-                        max: Pos2 {
-                            x: fields_rect.right(),
-                            y: label_response.rect.bottom(),
-                        },
-                    };
-                    ui.allocate_ui_at_rect(result_controls_rect, |ui| {
-                        ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                            list_state.show_controls(ui);
-                        });
-                    });
-                }
+        let deleted_index =
+            OrderableList::new_with_factory(&mut poll.metric_trackers, "Metric", || {
+                MetricTracker::init_from_questions(&poll.questions)
+            })
+            .add_button_is_at_bottom()
+            .show(ui, |list_state, ui, metric_tracker| {
+                let response =
+                    ui.group(|ui| {
+                        let label_response =
+                            ui.label(format!("Metric {}", list_state.current_index + 1));
+                        if let Some(fields_rect) = ui_data.fields_rect {
+                            let result_controls_rect = Rect {
+                                min: Pos2 {
+                                    x: label_response.rect.right(),
+                                    y: label_response.rect.top(),
+                                },
+                                max: Pos2 {
+                                    x: fields_rect.right(),
+                                    y: label_response.rect.bottom(),
+                                },
+                            };
+                            ui.allocate_ui_at_rect(result_controls_rect, |ui| {
+                                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                    list_state.show_controls(ui);
+                                });
+                            });
+                        }
 
-                let desired_width = ui.standard_width();
-                let field_shape = Vec2::new(desired_width, 0.);
+                        let desired_width = ui.standard_width();
+                        let field_shape = Vec2::new(desired_width, 0.);
 
-                const MAX_FIELD_LEN: usize = 20;
-                match &mut metric_tracker.metric {
-                    Metric::SpecificResponses {
-                        question_index,
-                        choice,
-                    } => {
-                        ui.label("Question");
-                        ui.allocate_ui(field_shape, |ui| {
-                            ComboBox::from_id_source(format!(
-                                "selected_question_{}",
-                                list_state.current_index
-                            ))
-                            .width(desired_width)
-                            .show_index(
-                                ui,
+                        const MAX_FIELD_LEN: usize = 20;
+                        match &mut metric_tracker.metric {
+                            Metric::SpecificResponses {
                                 question_index,
-                                poll.questions.len(),
-                                |i| format!("{i}: {}", limit(&poll.questions[i].prompt)),
-                            );
-                        });
-
-                        match &poll.questions[*question_index].form {
-                            Form::ChooseOneorNone { options } => {
-                                let mut selected = if let Some(&selected) = choice.as_index() {
-                                    selected as usize
-                                } else {
-                                    invalidated_metric_indices.push(list_state.current_index);
-                                    return;
-                                };
-                                ui.label("Answer");
+                                choice,
+                            } => {
+                                ui.label("Question");
                                 ui.allocate_ui(field_shape, |ui| {
                                     ComboBox::from_id_source(format!(
-                                        "selected_answer_{}",
+                                        "selected_question_{}",
                                         list_state.current_index
                                     ))
+                                    .width(desired_width)
                                     .show_index(
                                         ui,
-                                        &mut selected,
-                                        options.len(),
-                                        |i| format!("{i}: {}", limit(&options[i])),
+                                        question_index,
+                                        poll.questions.len(),
+                                        |i| format!("{i}: {}", limit(&poll.questions[i].prompt)),
                                     );
                                 });
 
-                                *choice = Choice::Index(selected as u8);
-                            }
-                            Form::YesOrNo => {
-                                let mut selected = if let Some(&selected) = choice.as_yes_or_no() {
-                                    if selected {
-                                        1
-                                    } else {
-                                        0
+                                match &poll.questions[*question_index].form {
+                                    Form::ChooseOneorNone { options } => {
+                                        let mut selected =
+                                            if let Some(&selected) = choice.as_index() {
+                                                selected as usize
+                                            } else {
+                                                return;
+                                            };
+                                        ui.label("Answer");
+                                        ui.allocate_ui(field_shape, |ui| {
+                                            ComboBox::from_id_source(format!(
+                                                "selected_answer_{}",
+                                                list_state.current_index
+                                            ))
+                                            .show_index(ui, &mut selected, options.len(), |i| {
+                                                format!("{i}: {}", limit(&options[i]))
+                                            });
+                                        });
+
+                                        *choice = Choice::Index(selected as u8);
                                     }
-                                } else {
-                                    invalidated_metric_indices.push(list_state.current_index);
-                                    return;
-                                };
-                                ui.label("Answer");
-                                ui.allocate_ui(field_shape, |ui| {
-                                    ComboBox::from_id_source(format!(
-                                        "selected_answer_{}",
-                                        list_state.current_index
-                                    ))
-                                    .show_index(
-                                        ui,
-                                        &mut selected,
-                                        2,
-                                        |i| if i == 0 { "No" } else { "Yes" }.to_string(),
-                                    );
-                                });
+                                    Form::YesOrNo => {
+                                        let mut selected =
+                                            if let Some(&selected) = choice.as_yes_or_no() {
+                                                if selected {
+                                                    1
+                                                } else {
+                                                    0
+                                                }
+                                            } else {
+                                                // could probably remove this branch
+                                                return;
+                                            };
+                                        ui.label("Answer");
+                                        ui.allocate_ui(field_shape, |ui| {
+                                            ComboBox::from_id_source(format!(
+                                                "selected_answer_{}",
+                                                list_state.current_index
+                                            ))
+                                            .show_index(ui, &mut selected, 2, |i| {
+                                                if i == 0 { "No" } else { "Yes" }.to_string()
+                                            });
+                                        });
 
-                                *choice = Choice::YesOrNo(selected != 0);
+                                        *choice = Choice::YesOrNo(selected != 0);
+                                    }
+                                }
                             }
                         }
-                    }
+                        ui.checkbox(
+                            &mut metric_tracker.publicly_visible,
+                            "Show progress publicly",
+                        );
+                    });
+                if list_state.current_index == 0 {
+                    ui_data.question_group_rect = Some(response.response.rect);
                 }
-                ui.checkbox(
-                    &mut metric_tracker.publicly_visible,
-                    "Show progress publicly",
-                );
             });
-            if list_state.current_index == 0 {
-                ui_data.question_group_rect = Some(response.response.rect);
-            }
-        });
-        for i in invalidated_metric_indices {
-            poll.metric_trackers.remove(i);
+        if let Some(index) = deleted_index {
+            Self::cleanup_metric_dependents(index, &mut poll.results);
         }
     }
 
@@ -408,8 +443,7 @@ impl NewPoll {
             return;
         }
 
-        OrderableList::new(&mut poll.results, "Metric")
-            .min_items(1)
+        OrderableList::new(&mut poll.results, "Result")
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, result| {
                 let response = ui.group(|ui| {
