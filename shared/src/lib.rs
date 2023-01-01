@@ -13,12 +13,14 @@ pub struct Question {
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
 pub enum FormResponse {
     ChooseOneOrNone(Option<Choice>),
+    ChooseOne(Choice),
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumIter)]
 pub enum Form {
     OneOrNone { options: Vec<String> },
     YesNoNone,
+    YesNo,
 }
 
 impl Display for Form {
@@ -32,6 +34,9 @@ impl Display for Form {
                 }
                 Form::YesNoNone => {
                     "Yes/No/None"
+                }
+                Form::YesNo => {
+                    "Yes/No"
                 }
             }
         )
@@ -83,7 +88,7 @@ impl Metric {
                 use Form::*;
                 let choice = match form {
                     OneOrNone { options } => &options[*choice.as_index().unwrap() as usize],
-                    YesNoNone => {
+                    YesNoNone | YesNo => {
                         if *choice.as_yes_or_no().unwrap() {
                             "Yes"
                         } else {
@@ -105,13 +110,14 @@ pub struct MetricTracker {
 
 impl MetricTracker {
     pub fn init_from_questions(questions: &[Question]) -> Option<Self> {
+        use Form::*;
         questions.get(0).map(|question| MetricTracker {
             publicly_visible: false,
             metric: Metric::SpecificResponses {
                 question_index: 0,
                 choice: match question.form {
-                    Form::OneOrNone { .. } => Choice::Index(0),
-                    Form::YesNoNone => Choice::YesOrNo(true),
+                    OneOrNone { .. } => Choice::Index(0),
+                    YesNoNone | YesNo => Choice::YesOrNo(true),
                 },
             },
         })
@@ -133,11 +139,16 @@ impl Metric {
                 let mut count = 0;
                 for poll_response in responses.values() {
                     match poll_response.get(*question_index).unwrap() {
-                        FormResponse::ChooseOneOrNone(choice) => {
-                            if let Some(chosen_index) = choice {
-                                if chosen_index == metric_choice {
+                        FormResponse::ChooseOneOrNone(response_choice) => {
+                            if let Some(response_choice) = response_choice {
+                                if response_choice == metric_choice {
                                     count += 1;
                                 }
+                            }
+                        }
+                        FormResponse::ChooseOne(response_choice) => {
+                            if response_choice == metric_choice {
+                                count += 1;
                             }
                         }
                     }
@@ -224,6 +235,7 @@ impl Poll {
             .iter()
             .map(|q| match q.form {
                 Form::OneOrNone { .. } | Form::YesNoNone => FormResponse::ChooseOneOrNone(None),
+                Form::YesNo => FormResponse::ChooseOne(Choice::YesOrNo(false)),
             })
             .collect::<Vec<_>>()
     }

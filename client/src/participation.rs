@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{app::SignInData, misc::Submitter};
+use crate::{app::SignInData, misc::Submitter, toggle_switch::toggle_ui};
 use areyougoing_shared::{Choice, Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
 use derivative::Derivative;
 use egui::{Button, ScrollArea, TextEdit, Ui};
@@ -140,6 +140,10 @@ impl ParticipationState {
                                             *choice = Some(Choice::YesOrNo(false));
                                         }
                                     }
+                                    (Form::YesNo, FormResponse::ChooseOne(choice)) => {
+                                        toggle_ui(ui, choice.as_yes_or_no_mut().unwrap());
+                                    }
+                                    _ => unreachable!(),
                                 }
                             });
                         }

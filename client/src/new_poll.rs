@@ -276,7 +276,7 @@ impl NewPoll {
                                 },
                             );
                         }
-                        Form::YesNoNone => {}
+                        Form::YesNoNone | Form::YesNo => {}
                     }
                 });
                 if list_state.current_index == 0 {
@@ -395,7 +395,7 @@ impl NewPoll {
 
                                         *choice = Choice::Index(selected as u8);
                                     }
-                                    Form::YesNoNone => {
+                                    Form::YesNoNone | Form::YesNo => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_yes_or_no() {
                                                 if selected {
