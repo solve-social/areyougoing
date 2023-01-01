@@ -105,6 +105,21 @@ impl ParticipationState {
                                             }
                                         }
                                     }
+                                    (Form::One { options }, FormResponse::ChooseOne(choice)) => {
+                                        for (i, option) in options.iter().enumerate() {
+                                            let selected = *choice.as_index().unwrap() == i as u8;
+                                            let mut button = Button::new(option);
+                                            if selected {
+                                                button = button.fill(
+                                                    ui.ctx().style().visuals.selection.bg_fill,
+                                                );
+                                            }
+                                            let response = ui.add(button);
+                                            if response.clicked() {
+                                                *choice = Choice::Index(i as u8);
+                                            }
+                                        }
+                                    }
                                     (Form::YesNoNone, FormResponse::ChooseOneOrNone(choice)) => {
                                         let mut yes_button = Button::new("Yes");
                                         let mut no_button = Button::new("No");

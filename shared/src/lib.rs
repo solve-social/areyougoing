@@ -19,6 +19,7 @@ pub enum FormResponse {
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumIter)]
 pub enum Form {
     OneOrNone { options: Vec<String> },
+    One { options: Vec<String> },
     YesNoNone,
     YesNo,
 }
@@ -30,7 +31,10 @@ impl Display for Form {
             "{}",
             match self {
                 Form::OneOrNone { .. } => {
-                    "One/None"
+                    "Pick 1/None"
+                }
+                Form::One { .. } => {
+                    "Pick 1"
                 }
                 Form::YesNoNone => {
                     "Yes/No/None"
@@ -87,7 +91,9 @@ impl Metric {
                 let Question { prompt, form } = &questions[*question_index];
                 use Form::*;
                 let choice = match form {
-                    OneOrNone { options } => &options[*choice.as_index().unwrap() as usize],
+                    OneOrNone { options } | One { options } => {
+                        &options[*choice.as_index().unwrap() as usize]
+                    }
                     YesNoNone | YesNo => {
                         if *choice.as_yes_or_no().unwrap() {
                             "Yes"
@@ -116,7 +122,7 @@ impl MetricTracker {
             metric: Metric::SpecificResponses {
                 question_index: 0,
                 choice: match question.form {
-                    OneOrNone { .. } => Choice::Index(0),
+                    OneOrNone { .. } | One { .. } => Choice::Index(0),
                     YesNoNone | YesNo => Choice::YesOrNo(true),
                 },
             },
@@ -235,6 +241,7 @@ impl Poll {
             .iter()
             .map(|q| match q.form {
                 Form::OneOrNone { .. } | Form::YesNoNone => FormResponse::ChooseOneOrNone(None),
+                Form::One { .. } => FormResponse::ChooseOne(Choice::Index(0)),
                 Form::YesNo => FormResponse::ChooseOne(Choice::YesOrNo(false)),
             })
             .collect::<Vec<_>>()

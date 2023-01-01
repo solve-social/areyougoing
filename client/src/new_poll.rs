@@ -228,7 +228,8 @@ impl NewPoll {
                                 ui.separator();
                                 ui.menu_button("Type", |ui| {
                                     for variant in Form::iter() {
-                                        let mut button = Button::new(variant.to_string());
+                                        let mut button =
+                                            Button::new(variant.to_string()).wrap(false);
                                         let selected =
                                             discriminant(&variant) == discriminant(&question.form);
                                         if selected {
@@ -254,7 +255,7 @@ impl NewPoll {
                     ui_data.fields_rect = Some(response.rect);
 
                     match &mut question.form {
-                        Form::OneOrNone { ref mut options } => {
+                        Form::OneOrNone { ref mut options } | Form::One { ref mut options } => {
                             ui.separator();
                             OrderableList::new(options, "Option").min_items(1).show(
                                 ui,
@@ -375,7 +376,7 @@ impl NewPoll {
                                 });
 
                                 match &poll.questions[*question_index].form {
-                                    Form::OneOrNone { options } => {
+                                    Form::OneOrNone { options } | Form::One { options } => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_index() {
                                                 selected as usize
