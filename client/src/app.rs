@@ -1,4 +1,4 @@
-use crate::misc::{console_log, get_window, listen_in_window, AtomicBoolExt};
+use crate::misc::{get_window, listen_in_window, AtomicBoolExt};
 use crate::new_poll::NewPoll;
 use crate::participation::ParticipationState;
 use crate::poll::PollState;
@@ -136,7 +136,6 @@ impl App {
                 }
             }
         }
-        console_log!("Initial PollState: {:?}", app.poll_state);
 
         app
     }

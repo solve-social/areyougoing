@@ -254,7 +254,7 @@ impl NewPoll {
                     ui_data.fields_rect = Some(response.rect);
 
                     match &mut question.form {
-                        Form::ChooseOneorNone { ref mut options } => {
+                        Form::OneOrNone { ref mut options } => {
                             ui.separator();
                             OrderableList::new(options, "Option").min_items(1).show(
                                 ui,
@@ -276,7 +276,7 @@ impl NewPoll {
                                 },
                             );
                         }
-                        Form::YesOrNo => {}
+                        Form::YesNoNone => {}
                     }
                 });
                 if list_state.current_index == 0 {
@@ -375,7 +375,7 @@ impl NewPoll {
                                 });
 
                                 match &poll.questions[*question_index].form {
-                                    Form::ChooseOneorNone { options } => {
+                                    Form::OneOrNone { options } => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_index() {
                                                 selected as usize
@@ -395,7 +395,7 @@ impl NewPoll {
 
                                         *choice = Choice::Index(selected as u8);
                                     }
-                                    Form::YesOrNo => {
+                                    Form::YesNoNone => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_yes_or_no() {
                                                 if selected {

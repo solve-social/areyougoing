@@ -17,8 +17,8 @@ pub enum FormResponse {
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumIter)]
 pub enum Form {
-    ChooseOneorNone { options: Vec<String> },
-    YesOrNo,
+    OneOrNone { options: Vec<String> },
+    YesNoNone,
 }
 
 impl Display for Form {
@@ -27,11 +27,11 @@ impl Display for Form {
             f,
             "{}",
             match self {
-                Form::ChooseOneorNone { .. } => {
-                    "Choose One/None"
+                Form::OneOrNone { .. } => {
+                    "One/None"
                 }
-                Form::YesOrNo => {
-                    "Yes/No"
+                Form::YesNoNone => {
+                    "Yes/No/None"
                 }
             }
         )
@@ -40,7 +40,7 @@ impl Display for Form {
 
 impl Default for Form {
     fn default() -> Self {
-        Self::ChooseOneorNone {
+        Self::OneOrNone {
             options: Default::default(),
         }
     }
@@ -82,8 +82,8 @@ impl Metric {
                 let Question { prompt, form } = &questions[*question_index];
                 use Form::*;
                 let choice = match form {
-                    ChooseOneorNone { options } => &options[*choice.as_index().unwrap() as usize],
-                    YesOrNo => {
+                    OneOrNone { options } => &options[*choice.as_index().unwrap() as usize],
+                    YesNoNone => {
                         if *choice.as_yes_or_no().unwrap() {
                             "Yes"
                         } else {
@@ -110,8 +110,8 @@ impl MetricTracker {
             metric: Metric::SpecificResponses {
                 question_index: 0,
                 choice: match question.form {
-                    Form::ChooseOneorNone { .. } => Choice::Index(0),
-                    Form::YesOrNo => Choice::YesOrNo(true),
+                    Form::OneOrNone { .. } => Choice::Index(0),
+                    Form::YesNoNone => Choice::YesOrNo(true),
                 },
             },
         })
@@ -223,7 +223,7 @@ impl Poll {
         self.questions
             .iter()
             .map(|q| match q.form {
-                Form::ChooseOneorNone { .. } | Form::YesOrNo => FormResponse::ChooseOneOrNone(None),
+                Form::OneOrNone { .. } | Form::YesNoNone => FormResponse::ChooseOneOrNone(None),
             })
             .collect::<Vec<_>>()
     }

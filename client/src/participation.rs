@@ -82,7 +82,7 @@ impl ParticipationState {
                                 ui.label(&question.prompt);
                                 match (&question.form, &mut question_response) {
                                     (
-                                        Form::ChooseOneorNone { options },
+                                        Form::OneOrNone { options },
                                         FormResponse::ChooseOneOrNone(choice),
                                     ) => {
                                         for (i, option) in options.iter().enumerate() {
@@ -105,7 +105,7 @@ impl ParticipationState {
                                             }
                                         }
                                     }
-                                    (Form::YesOrNo, FormResponse::ChooseOneOrNone(choice)) => {
+                                    (Form::YesNoNone, FormResponse::ChooseOneOrNone(choice)) => {
                                         let mut yes_button = Button::new("Yes");
                                         let mut no_button = Button::new("No");
 

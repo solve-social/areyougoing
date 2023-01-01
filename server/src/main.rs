@@ -279,13 +279,13 @@ impl Db {
             let default_questions = vec![
                 Question {
                     prompt: "Are you going?".to_string(),
-                    form: Form::ChooseOneorNone {
+                    form: Form::OneOrNone {
                         options: vec!["Yes".to_string(), "No".to_string()],
                     },
                 },
                 Question {
                     prompt: "How are you arriving?".to_string(),
-                    form: Form::ChooseOneorNone {
+                    form: Form::OneOrNone {
                         options: vec![
                             "Driving own car".to_string(),
                             "Walking".to_string(),
@@ -295,7 +295,7 @@ impl Db {
                 },
                 Question {
                     prompt: "Which restaurant would you prefer?".to_string(),
-                    form: Form::ChooseOneorNone {
+                    form: Form::OneOrNone {
                         options: vec![
                             "Chilis".to_string(),
                             "Burger King".to_string(),
