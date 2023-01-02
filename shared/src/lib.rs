@@ -14,12 +14,14 @@ pub struct Question {
 pub enum FormResponse {
     ChooseOneOrNone(Option<Choice>),
     ChooseOne(Choice),
+    ChooseMultiple(Vec<Choice>),
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Debug, EnumIter)]
 pub enum Form {
     OneOrNone { options: Vec<String> },
     One { options: Vec<String> },
+    Multiple { options: Vec<String> },
     YesNoNone,
     YesNo,
 }
@@ -35,6 +37,9 @@ impl Display for Form {
                 }
                 Form::One { .. } => {
                     "Pick 1"
+                }
+                Form::Multiple { .. } => {
+                    "Pick Multiple"
                 }
                 Form::YesNoNone => {
                     "Yes/No/None"
@@ -91,7 +96,7 @@ impl Metric {
                 let Question { prompt, form } = &questions[*question_index];
                 use Form::*;
                 let choice = match form {
-                    OneOrNone { options } | One { options } => {
+                    OneOrNone { options } | One { options } | Multiple { options } => {
                         &options[*choice.as_index().unwrap() as usize]
                     }
                     YesNoNone | YesNo => {
@@ -122,7 +127,7 @@ impl MetricTracker {
             metric: Metric::SpecificResponses {
                 question_index: 0,
                 choice: match question.form {
-                    OneOrNone { .. } | One { .. } => Choice::Index(0),
+                    OneOrNone { .. } | One { .. } | Multiple { .. } => Choice::Index(0),
                     YesNoNone | YesNo => Choice::YesOrNo(true),
                 },
             },
@@ -155,6 +160,13 @@ impl Metric {
                         FormResponse::ChooseOne(response_choice) => {
                             if response_choice == metric_choice {
                                 count += 1;
+                            }
+                        }
+                        FormResponse::ChooseMultiple(response_choices) => {
+                            for response_choice in response_choices {
+                                if response_choice == metric_choice {
+                                    count += 1;
+                                }
                             }
                         }
                     }
@@ -243,6 +255,7 @@ impl Poll {
                 Form::OneOrNone { .. } | Form::YesNoNone => FormResponse::ChooseOneOrNone(None),
                 Form::One { .. } => FormResponse::ChooseOne(Choice::Index(0)),
                 Form::YesNo => FormResponse::ChooseOne(Choice::YesOrNo(false)),
+                Form::Multiple { .. } => FormResponse::ChooseMultiple(Vec::new()),
             })
             .collect::<Vec<_>>()
     }

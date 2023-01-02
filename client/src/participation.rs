@@ -120,6 +120,35 @@ impl ParticipationState {
                                             }
                                         }
                                     }
+                                    (
+                                        Form::Multiple { options },
+                                        FormResponse::ChooseMultiple(choices),
+                                    ) => {
+                                        for (i, option) in options.iter().enumerate() {
+                                            let choice_index = choices
+                                                .iter()
+                                                .enumerate()
+                                                .filter(|(_, c)| {
+                                                    *c.as_index().unwrap() as usize == i
+                                                })
+                                                .map(|(i, _)| i)
+                                                .next();
+                                            let mut button = Button::new(option);
+                                            if choice_index.is_some() {
+                                                button = button.fill(
+                                                    ui.ctx().style().visuals.selection.bg_fill,
+                                                );
+                                            }
+                                            let response = ui.add(button);
+                                            if response.clicked() {
+                                                if let Some(index) = choice_index {
+                                                    choices.remove(index);
+                                                } else {
+                                                    choices.push(Choice::Index(i as u8));
+                                                };
+                                            }
+                                        }
+                                    }
                                     (Form::YesNoNone, FormResponse::ChooseOneOrNone(choice)) => {
                                         let mut yes_button = Button::new("Yes");
                                         let mut no_button = Button::new("No");

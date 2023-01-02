@@ -255,7 +255,9 @@ impl NewPoll {
                     ui_data.fields_rect = Some(response.rect);
 
                     match &mut question.form {
-                        Form::OneOrNone { ref mut options } | Form::One { ref mut options } => {
+                        Form::OneOrNone { ref mut options }
+                        | Form::One { ref mut options }
+                        | Form::Multiple { ref mut options } => {
                             ui.separator();
                             OrderableList::new(options, "Option").min_items(1).show(
                                 ui,
@@ -376,7 +378,9 @@ impl NewPoll {
                                 });
 
                                 match &poll.questions[*question_index].form {
-                                    Form::OneOrNone { options } | Form::One { options } => {
+                                    Form::OneOrNone { options }
+                                    | Form::One { options }
+                                    | Form::Multiple { options } => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_index() {
                                                 selected as usize
