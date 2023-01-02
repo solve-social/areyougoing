@@ -290,7 +290,7 @@ impl UiExt for Ui {
 pub struct OrderableList<'a, T> {
     items: &'a mut Vec<T>,
     inner: OrederableListInner,
-    item_factory: Box<dyn 'a + Fn() -> Option<T>>,
+    item_factory: Option<Box<dyn 'a + Fn() -> Option<T>>>,
 }
 
 #[derive(Default)]
@@ -304,6 +304,7 @@ pub struct OrederableListInner {
     item_description: String,
     item_spacing: Option<Vec2>,
     add_button_is_at_bottom: bool,
+    no_deleting_or_creating: bool,
 }
 
 impl OrederableListInner {
@@ -318,20 +319,26 @@ impl OrederableListInner {
 
         let mut rect = None;
 
-        ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
-            let response = ui.small_button("🗑");
-            rect = Some(response.rect);
-            if response
-                .on_hover_text(format!("Delete {}", self.item_description))
-                .clicked()
-            {
-                self.delete_index = Some(self.current_index);
-            }
-        });
+        if !self.no_deleting_or_creating {
+            ui.add_enabled_ui(self.num_items > self.min_items, |ui| {
+                let response = ui.small_button("🗑");
+                rect = Some(response.rect);
+                if response
+                    .on_hover_text(format!("Delete {}", self.item_description))
+                    .clicked()
+                {
+                    self.delete_index = Some(self.current_index);
+                }
+            });
+        }
 
         ui.add_enabled_ui(self.current_index < self.num_items - 1, |ui| {
             let response = ui.small_button("⬇");
-            rect = Some(rect.unwrap().union(response.rect));
+            rect = Some(if let Some(rect) = rect {
+                rect.union(response.rect)
+            } else {
+                response.rect
+            });
             if response
                 .on_hover_text(format!("Move {} Down", self.item_description))
                 .clicked()
@@ -349,7 +356,7 @@ impl OrederableListInner {
                 self.swap_indices = Some((self.current_index, self.current_index - 1));
             }
         });
-        if !self.add_button_is_at_bottom {
+        if !self.add_button_is_at_bottom && !self.no_deleting_or_creating {
             let response = ui.small_button("➕");
             rect = Some(rect.unwrap().union(response.rect));
             if response
@@ -366,38 +373,48 @@ impl OrederableListInner {
 }
 
 impl<'a, T> OrderableList<'a, T> {
-    pub fn new(items: &'a mut Vec<T>, item_description: &str) -> Self
+    pub fn new(items: &'a mut Vec<T>) -> Self
     where
         T: Default,
     {
         Self {
             inner: OrederableListInner {
                 num_items: items.len(),
-                item_description: item_description.to_string(),
                 ..Default::default()
             },
             items,
-            item_factory: Box::new(|| Some(T::default())),
+            item_factory: Some(Box::new(|| Some(T::default()))),
         }
     }
 
-    pub fn new_with_factory<F>(
-        items: &'a mut Vec<T>,
-        item_description: &str,
-        item_factory: F,
-    ) -> Self
+    pub fn new_with_factory<F>(items: &'a mut Vec<T>, item_factory: F) -> Self
     where
         F: Fn() -> Option<T> + 'a,
     {
         Self {
             inner: OrederableListInner {
                 num_items: items.len(),
-                item_description: item_description.to_string(),
                 ..Default::default()
             },
             items,
-            item_factory: Box::new(item_factory),
+            item_factory: Some(Box::new(item_factory)),
         }
+    }
+
+    pub fn new_fixed(items: &'a mut Vec<T>) -> Self {
+        Self {
+            inner: OrederableListInner {
+                num_items: items.len(),
+                ..Default::default()
+            },
+            items,
+            item_factory: None,
+        }
+    }
+
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.inner.item_description = description.to_string();
+        self
     }
 
     pub fn min_items(mut self, min_items: usize) -> Self {
@@ -415,10 +432,18 @@ impl<'a, T> OrderableList<'a, T> {
         self
     }
 
+    pub fn no_deleting_or_creating(mut self) -> Self {
+        self.inner.no_deleting_or_creating = true;
+        self
+    }
+
     pub fn show<F>(&mut self, ui: &mut Ui, mut add_contents: F) -> Option<usize>
     where
         F: FnMut(&mut OrederableListInner, &mut Ui, &mut T),
     {
+        if self.inner.item_description.is_empty() {
+            self.inner.item_description = "item".to_string();
+        }
         if self.inner.min_items == 0
             && self.inner.num_items == 0
             && ui
@@ -433,6 +458,7 @@ impl<'a, T> OrderableList<'a, T> {
             add_contents(&mut self.inner, ui, item);
 
             if self.inner.add_button_is_at_bottom
+                && !self.inner.no_deleting_or_creating
                 && ui
                     .small_button(format!("Add {}", self.inner.item_description))
                     .clicked()
@@ -448,9 +474,11 @@ impl<'a, T> OrderableList<'a, T> {
             self.inner.new_index = Some(self.items.len());
         }
         if let Some(index) = self.inner.new_index {
-            if let Some(new_item) = (self.item_factory)() {
-                self.items.insert(index, new_item);
-                ui.ctx().request_repaint_after(Duration::from_millis(100));
+            if let Some(item_factory) = &self.item_factory {
+                if let Some(new_item) = item_factory() {
+                    self.items.insert(index, new_item);
+                    ui.ctx().request_repaint_after(Duration::from_millis(100));
+                }
             }
         }
         if let Some((a, b)) = self.inner.swap_indices {

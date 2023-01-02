@@ -1,9 +1,13 @@
 use std::time::Duration;
 
-use crate::{app::SignInData, misc::Submitter, toggle_switch::toggle_ui};
+use crate::{
+    app::SignInData,
+    misc::{OrderableList, Submitter},
+    toggle_switch::toggle_ui,
+};
 use areyougoing_shared::{Choice, Form, FormResponse, Poll, PollResponse, PollSubmissionResult};
 use derivative::Derivative;
-use egui::{Button, ScrollArea, TextEdit, Ui};
+use egui::{vec2, Align, Button, Label, Layout, NumExt, ScrollArea, TextEdit, Ui};
 use serde::{Deserialize, Serialize};
 
 const SIGN_IN_TEXT: &str = "SIGN IN";
@@ -186,6 +190,51 @@ impl ParticipationState {
                                     }
                                     (Form::YesNo, FormResponse::ChooseOne(choice)) => {
                                         toggle_ui(ui, choice.as_yes_or_no_mut().unwrap());
+                                    }
+                                    (
+                                        Form::RankedChoice { options },
+                                        FormResponse::RankedChoice(choices),
+                                    ) => {
+                                        let mut ordered_choices = choices
+                                            .iter()
+                                            .map(|i| {
+                                                (
+                                                    i,
+                                                    options
+                                                        .get(*i.as_index().unwrap() as usize)
+                                                        .unwrap(),
+                                                )
+                                            })
+                                            .collect::<Vec<_>>();
+                                        const MIN_WIDTH: f32 = 24.0; // Never make a [`TextEdit`] more narrow than this.
+                                        let available_width =
+                                            ui.available_width().at_least(MIN_WIDTH);
+                                        OrderableList::new_fixed(&mut ordered_choices)
+                                            .no_deleting_or_creating()
+                                            .show(ui, |list_state, ui, (_, option)| {
+                                                ui.allocate_ui(
+                                                    vec2(
+                                                        ui.spacing()
+                                                            .text_edit_width
+                                                            .min(available_width),
+                                                        0.0,
+                                                    ),
+                                                    |ui| {
+                                                        ui.with_layout(
+                                                            Layout::right_to_left(Align::Center),
+                                                            |ui| {
+                                                                list_state.show_controls(ui);
+                                                                ui.add(Label::new(*option));
+                                                            },
+                                                        );
+                                                    },
+                                                );
+                                            });
+                                        *choices = ordered_choices
+                                            .into_iter()
+                                            .map(|(c, _)| c)
+                                            .cloned()
+                                            .collect();
                                     }
                                     _ => unreachable!(),
                                 }

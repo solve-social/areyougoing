@@ -188,7 +188,8 @@ impl NewPoll {
         );
 
         let mut reset_index = None;
-        let deleted_index = OrderableList::new(&mut poll.questions, "Question")
+        let deleted_index = OrderableList::new(&mut poll.questions)
+            .with_description("Question")
             .min_items(1)
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, question| {
@@ -257,11 +258,13 @@ impl NewPoll {
                     match &mut question.form {
                         Form::OneOrNone { ref mut options }
                         | Form::One { ref mut options }
-                        | Form::Multiple { ref mut options } => {
+                        | Form::Multiple { ref mut options }
+                        | Form::RankedChoice { ref mut options } => {
                             ui.separator();
-                            OrderableList::new(options, "Option").min_items(1).show(
-                                ui,
-                                |list_state, ui, option| {
+                            OrderableList::new(options)
+                                .with_description("Option")
+                                .min_items(1)
+                                .show(ui, |list_state, ui, option| {
                                     ui.allocate_ui(ui_data.fields_rect.unwrap().size(), |ui| {
                                         ui.with_layout(
                                             Layout::right_to_left(Align::Center),
@@ -276,8 +279,7 @@ impl NewPoll {
                                             },
                                         );
                                     });
-                                },
-                            );
+                                });
                         }
                         Form::YesNoNone | Form::YesNo => {}
                     }
@@ -326,9 +328,10 @@ impl NewPoll {
 
     fn show_metrics_form(ui: &mut Ui, poll: &mut Poll, ui_data: &mut CreatingUiData) {
         let deleted_index =
-            OrderableList::new_with_factory(&mut poll.metric_trackers, "Metric", || {
+            OrderableList::new_with_factory(&mut poll.metric_trackers, || {
                 MetricTracker::init_from_questions(&poll.questions)
             })
+            .with_description("Metric")
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, metric_tracker| {
                 let response =
@@ -380,7 +383,8 @@ impl NewPoll {
                                 match &poll.questions[*question_index].form {
                                     Form::OneOrNone { options }
                                     | Form::One { options }
-                                    | Form::Multiple { options } => {
+                                    | Form::Multiple { options }
+                                    | Form::RankedChoice { options } => {
                                         let mut selected =
                                             if let Some(&selected) = choice.as_index() {
                                                 selected as usize
@@ -448,7 +452,8 @@ impl NewPoll {
             return;
         }
 
-        OrderableList::new(&mut poll.results, "Result")
+        OrderableList::new(&mut poll.results)
+            .with_description("Result")
             .add_button_is_at_bottom()
             .show(ui, |list_state, ui, result| {
                 let response = ui.group(|ui| {
